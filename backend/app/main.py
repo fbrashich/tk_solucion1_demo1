@@ -5,12 +5,12 @@ from app.core.config import settings
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
-# CORS
+# CORS: Permitir origen local y túneles seguros de zrok.io, bloqueando orígenes no autorizados
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # En producción se debería especificar el origin correcto
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.zrok\.io)(:[0-9]+)?$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

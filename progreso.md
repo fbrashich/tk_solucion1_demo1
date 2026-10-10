@@ -152,5 +152,22 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
     2. **Encabezado HTTP (APIs y Scripts)**: Enviar `skip_zrok_interstitial: true` en las peticiones HTTP.
     3. **Túneles Privados**: El modo `zrok access private` nunca muestra pantalla intermedia.
 
+--------------------------------------------------------------------
+- **[ 10/10/2026 Pentesting Automatizado & Hardening de Seguridad 100% GREEN ]**
+--------------------------------------------------------------------
+- **[Batería de Pruebas de Seguridad y Pentesting Dinámico]**:
+  - Se desarrolló y ejecutó la suite automatizada `backend/security_audit.py` con 25 pruebas de seguridad ofensiva (DAST).
+  - Resultados iniciales: 15 PASS, 1 FAIL (SECRET_KEY por defecto), 9 WARN (hardening).
+- **[Remediaciones Aplicadas y Hardening]**:
+  - **Criptografía JWT**: Clave secreta robusta de 256 bits y expiración reducida a 120 minutos (2 horas).
+  - **Proxy Nginx**: Incorporación de cabeceras `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy`, `Referrer-Policy` y `server_tokens off;`.
+  - **Protección DoS / Rate Limiting**: Zonas `limit_req_zone` en Nginx con bloqueo HTTP 429 probado ante ráfagas masivas en `/api/ingest`.
+  - **Validación Geográfica WGS84**: Restricción estricta en `lat` `[-90, 90]` y `lon` `[-180, 180]` con Pydantic.
+  - **Prevención Anti-XSS**: Sanitización de campos de texto en `DeviceBase` y `DeviceUpdate` bloqueando etiquetas HTML y scripts con HTTP 422.
+  - **Restricción CORS**: Regex para admitir exclusivamente localhost y subdominios oficiales de `*.zrok.io`.
+- **[Resultado Final de Pentesting #2]**:
+  - **25 / 25 Pruebas Aprobadas (100% PASS - Cero Vulnerabilidades - Cero Advertencias)**.
+  - Reporte consolidado y tabla de seguimiento cronológico guardados en `pentesting.md`.
+
 
 
