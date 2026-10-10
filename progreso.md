@@ -55,7 +55,9 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
 - **[Simulador Standalone]**: Se refactorizó `demo_device.py` reemplazando la dependencia externa `requests` por la librería estándar (`urllib.request` y `json`), permitiendo ejecutar la simulación de telemetría de forma inmediata con cualquier instalación de Python 3 sin necesidad de `pip install`.
 - **[Rediseño UI/UX Industrial]**: Se reestructuró la configuración de Tailwind CSS v4 (`@import "tailwindcss";`), se añadieron fuentes modernas de Google Fonts (*Plus Jakarta Sans* y *JetBrains Mono*) y se rediseñaron integralmente las vistas de Login y Dashboard:
   - *Login*: Tarjeta glassmorphism, efectos de iluminación ambiental, botón de autocompletado demo (`admin`/`admin123`) y validaciones visuales.
-  - *Dashboard*: Paleta industrial sobria (Dark Slate/Zinc con acentos Esmeralda, Cyan y Ámbar), barra de sincronización con contador regresivo de polling (15s), botón de refresco manual, 4 tarjetas de métricas con indicadores visuales reactivos, mapa con capa CartoDB Dark Matter, trazado de trayectoria GPS (*polyline*), baliza animada radar en tiempo real y tabla de logs con filtrado interactivo.
+- **[Corrección de Capas de Mapa (Sin API Key)]**: Se sustituyeron los mosaicos de CARTO (que requerían API key) por OpenStreetMap con filtro CSS oscuro calibrado nativo, añadiendo además capa satelital Esri y estándar sin restricciones de clave.
+- **[Sincronización de Red y Healthcheck Docker]**: Se configuró un healthcheck de PostgreSQL (`pg_isready -U postgres`) en `docker-compose.yml` junto con la condición `service_healthy` en la API. Además, en `init_db.py` se implementó la recreación limpia del motor de SQLAlchemy por intento, eliminando el fallo transitorio de resolución DNS (`socket.gaierror: [Errno -3] Temporary failure in name resolution`) durante el arranque en frío.
+
 
 
 
