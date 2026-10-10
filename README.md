@@ -51,4 +51,42 @@ El script de inicialización crea automáticamente dos cuentas listas para usar:
   - Descarga instantánea de reportes de telemetría históricos en formato `.csv` con marcas temporales UTC, estados de ignición y coordenadas GPS.
 - **Simulador Multi-Dispositivo:**
   - `python demo_device.py` transmite en vivo y en paralelo para múltiples máquinas (`MESA_01` y `MESA_02`), permitiendo observar el movimiento sincronizado y el comportamiento en el mapa.
+- **Aislamiento Multi-Tenant Estricto (Privacidad de Clientes):**
+  - Cada dispositivo está asociado a nivel relacional en PostgreSQL a su cuenta de operador (`devices.user_id = users.id`).
+  - Cada operador únicamente tiene visibilidad y acceso a su propia maquinaria y telemetría.
+  - El Super Administrador supervisa cuentas y volumen de equipos sin acceso a la telemetría privada.
+  - Para nuevos operadores sin equipos asignados (ej. `demo1`), la interfaz muestra un espacio inicial con botón de alta.
+
+---
+
+## Despliegue con Túnel Inverso Zrok en Docker
+
+La plataforma incluye soporte nativo para ejecutar **Zrok** como servicio dentro de Docker Compose sin necesidad de abrir consolas manuales adicionales.
+
+### 1. Iniciar Zrok automáticamente con Docker Compose
+Si ya tienes `zrok` habilitado en tu máquina host (`~/.zrok2` en Windows/Linux):
+```bash
+docker compose --profile zrok up -d
+```
+Docker Compose montará tu sesión de zrok y compartirá automáticamente `http://web:80` en segundo plano.
+
+Para ver la URL pública generada por Zrok:
+```bash
+docker compose logs zrok
+```
+
+### 2. Cómo remover la pantalla de advertencia inicial (Página Interstitial de Zrok 2)
+En las versiones recientes de Zrok 2, los enlaces públicos muestran una pantalla de cortesía anti-phishing antes de redirigir al sitio web. Para eliminarla:
+
+1. **Para usuarios y navegadores web (Recomendado):**
+   - Ingresa al portal de Zrok en [https://api.zrok.io](https://api.zrok.io).
+   - En la configuración de tu cuenta, asocia una tarjeta para verificarla (el costo es de **$0 USD** para cuentas gratuitas).
+   - Una vez verificada la cuenta, Zrok **desactiva automáticamente la pantalla de advertencia** para todos los enlaces públicos que crees.
+2. **Para consumo programático (APIs / Postman / cURL / Scripts):**
+   - Agrega el encabezado HTTP:
+     ```http
+     skip_zrok_interstitial: true
+     ```
+     Las herramientas que envíen este encabezado omiten inmediatamente la pantalla de espera.
+
 

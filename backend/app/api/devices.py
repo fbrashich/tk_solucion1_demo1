@@ -64,10 +64,8 @@ async def list_devices(
     if current_user.role == "admin":
         return []
 
-    # El Operador solo ve los dispositivos asociados a su cuenta (o huérfanos/demo)
-    query = select(Device).where(
-        or_(Device.user_id == current_user.id, Device.user_id.is_(None))
-    )
+    # El Operador solo ve de forma PRIVADA y ESTRICTA los dispositivos asociados a su cuenta
+    query = select(Device).where(Device.user_id == current_user.id)
     if not include_inactive:
         query = query.where(Device.is_active == True)
     query = query.order_by(Device.device_id)
@@ -83,24 +81,53 @@ async def create_device(
     current_user: User = Depends(get_current_user)
 ):
     clean_id = payload.device_id.strip().upper()
-    existing = await db.execute(select(Device).where(Device.device_id == clean_id))
-    if existing.scalars().first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El identificador de dispositivo '{clean_id}' ya existe."
-        )
+    existing_res = await db.execute(select(Device).where(Device.device_id == clean_id))
+    existing_dev = existing_res.scalars().first()
 
     # Verificar si el IMEI / UniqueID de Traccar ya está en uso
-    if payload.traccar_unique_id:
-        clean_traccar_id = payload.traccar_unique_id.strip()
-        existing_traccar = await db.execute(
+    clean_traccar_id = payload.traccar_unique_id.strip() if payload.traccar_unique_id else None
+    if clean_traccar_id:
+        existing_traccar_res = await db.execute(
             select(Device).where(Device.traccar_unique_id == clean_traccar_id)
         )
-        if existing_traccar.scalars().first():
+        existing_traccar_dev = existing_traccar_res.scalars().first()
+        if existing_traccar_dev and (not existing_dev or existing_traccar_dev.id != existing_dev.id):
+            if existing_traccar_dev.user_id == current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El ID de Traccar / IMEI '{clean_traccar_id}' ya está registrado en tu equipo '{existing_traccar_dev.device_id}'."
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El ID de Traccar / IMEI '{clean_traccar_id}' ya está en uso por otro operador."
+                )
+
+    if existing_dev:
+        if existing_dev.user_id is not None and existing_dev.user_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"El ID de Traccar / IMEI '{clean_traccar_id}' ya está registrado en otro equipo."
+                detail=f"El identificador de dispositivo '{clean_id}' ya pertenece a otro cliente/operador."
             )
+        elif existing_dev.user_id == current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El identificador de dispositivo '{clean_id}' ya se encuentra registrado en tu flota."
+            )
+        else:
+            # Reclamar y activar equipo huérfano para este operador
+            existing_dev.name = payload.name.strip()
+            existing_dev.type = payload.type.strip() if payload.type else "Mesa Vibratoria"
+            existing_dev.description = payload.description.strip() if payload.description else None
+            existing_dev.is_active = payload.is_active
+            existing_dev.user_id = current_user.id
+            existing_dev.traccar_unique_id = clean_traccar_id
+            existing_dev.traccar_model = payload.traccar_model.strip() if payload.traccar_model else None
+            existing_dev.sim_phone = payload.sim_phone.strip() if payload.sim_phone else None
+            existing_dev.category = payload.category.strip() if payload.category else "machinery"
+            await db.commit()
+            await db.refresh(existing_dev)
+            return existing_dev
 
     device = Device(
         device_id=clean_id,
@@ -109,7 +136,7 @@ async def create_device(
         description=payload.description.strip() if payload.description else None,
         is_active=payload.is_active,
         user_id=current_user.id,
-        traccar_unique_id=payload.traccar_unique_id.strip() if payload.traccar_unique_id else None,
+        traccar_unique_id=clean_traccar_id,
         traccar_model=payload.traccar_model.strip() if payload.traccar_model else None,
         sim_phone=payload.sim_phone.strip() if payload.sim_phone else None,
         category=payload.category.strip() if payload.category else "machinery"
@@ -132,7 +159,7 @@ async def update_device(
         raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
 
     # Validar permisos de propiedad si es operador
-    if current_user.role != "admin" and device.user_id is not None and device.user_id != current_user.id:
+    if current_user.role != "admin" and device.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permisos para modificar este equipo")
 
     if payload.name is not None:
@@ -168,7 +195,7 @@ async def delete_device(
         raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
 
     # Validar permisos de propiedad si es operador
-    if current_user.role != "admin" and device.user_id is not None and device.user_id != current_user.id:
+    if current_user.role != "admin" and device.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permisos para eliminar este equipo")
 
     # Limpiar estado acumulado y eventos de telemetría asociados
@@ -200,9 +227,9 @@ async def get_all_devices_status(
 
     now = datetime.now(timezone.utc)
     
-    # 1. Obtener los dispositivos del operador
+    # 1. Obtener los dispositivos del operador de forma ESTRICTAMENTE PRIVADA
     dev_query = select(Device).where(
-        or_(Device.user_id == current_user.id, Device.user_id.is_(None)),
+        Device.user_id == current_user.id,
         Device.is_active == True
     ).order_by(Device.device_id)
     dev_res = await db.execute(dev_query)
@@ -281,11 +308,8 @@ async def get_device_status(
     result_state = await db.execute(select(DeviceState).where(DeviceState.device_id == device_id))
     device_state = result_state.scalars().first()
 
-    if not device_state and not device:
-        raise HTTPException(status_code=404, detail=f"Dispositivo '{device_id}' no encontrado")
-
-    if device and device.user_id is not None and device.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No tienes permisos para ver este dispositivo")
+    if not device or device.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail=f"Dispositivo '{device_id}' no encontrado o no asignado a esta cuenta")
 
     result_event = await db.execute(
         select(TelemetryEvent)
@@ -304,8 +328,8 @@ async def get_device_status(
 
     return DeviceStatusResponse(
         device_id=device_id,
-        name=device.name if device else f"Equipo {device_id}",
-        type=device.type if device else "Mesa Vibratoria",
+        name=device.name,
+        type=device.type,
         status=status_str,
         ignition=ignition_val,
         last_lat=last_event.latitude if last_event else None,
@@ -324,12 +348,13 @@ async def get_device_logs(
     if current_user.role == "admin":
         return []
 
-    # Obtener dispositivos autorizados para este operador
-    dev_query = select(Device.device_id).where(
-        or_(Device.user_id == current_user.id, Device.user_id.is_(None))
-    )
+    # Obtener dispositivos autorizados para este operador (estrictamente privados)
+    dev_query = select(Device.device_id).where(Device.user_id == current_user.id)
     auth_devs_res = await db.execute(dev_query)
     authorized_dev_ids = auth_devs_res.scalars().all()
+
+    if not authorized_dev_ids:
+        return []
 
     query = select(TelemetryEvent)
     if device_id != "all":
@@ -358,11 +383,12 @@ async def export_device_telemetry(
     if current_user.role == "admin":
         raise HTTPException(status_code=403, detail="El administrador no tiene acceso a exportación operativa")
 
-    dev_query = select(Device.device_id).where(
-        or_(Device.user_id == current_user.id, Device.user_id.is_(None))
-    )
+    dev_query = select(Device.device_id).where(Device.user_id == current_user.id)
     auth_devs_res = await db.execute(dev_query)
     authorized_dev_ids = auth_devs_res.scalars().all()
+
+    if not authorized_dev_ids:
+        raise HTTPException(status_code=404, detail="No tienes dispositivos registrados en tu cuenta")
 
     query = select(TelemetryEvent)
     if device_id != "all":

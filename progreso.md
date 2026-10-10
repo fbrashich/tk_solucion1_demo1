@@ -130,4 +130,27 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
   - ¿Es Traccar una buena opción?: **Sí, excelente opción**, ya que Traccar es el estándar abierto líder que soporta más de 2.000 protocolos de hardware GPS (Teltonika, Queclink, Suntech, Coban, Concox, ESP32, etc.).
   - ¿Qué datos solicitar?: Con el **IMEI / Unique ID**, el **Modelo** y el **SIM**, el backend se conecta directamente a los eventos de Traccar (vía Webhook hacia `/api/telemetry/ingest` o consumiendo la API REST de Traccar).
 
+--------------------------------------------------------------------
+- **[ 10/10/2026 Aislamiento Multi-Tenant de Clientes y Servicio Zrok en Docker ]**
+--------------------------------------------------------------------
+- **[Aislamiento Estricto de Clientes y Dispositivos (Multi-Tenancy Privado)]**:
+  - **Relación en Base de Datos**: Cada fila de la tabla `devices` almacena `user_id` como clave foránea (`ForeignKey("users.id")`).
+  - **Diagnóstico y Corrección de Fuga de Dispositivos**:
+    - Previamente, las consultas de lectura incluían `or_(Device.user_id == current_user.id, Device.user_id.is_(None))`. Si un equipo tenía `user_id = NULL`, era visible para todos los clientes (como `demo1`).
+    - Además, `ingest.py` creaba registros huérfanos con `user_id = None` si recibía telemetría de un equipo no registrado.
+    - Se refactorizó `devices.py` para aplicar **estricto aislamiento por propietario**: `Device.user_id == current_user.id` en `list_devices`, `get_all_devices_status`, `get_device_status`, `get_device_logs` y `export_device_telemetry`.
+    - Se modificó `ingest.py` para almacenar eventos y estados técnicos sin auto-crear equipos huérfanos sin dueño.
+    - Se implementó mecanismo de reclamo: si un operador registra un equipo previamente no asignado, lo asocia a su `user_id`. Si pertenece a otro operador, rechaza la solicitud con error 400.
+    - Se diseñó un **Empty State** en el frontend para operadores nuevos (`demo1`), indicando claramente el espacio privado y ofreciendo un botón para registrar su primer equipo.
+- **[Zrok como Servicio en Docker Compose]**:
+  - Se incorporó el servicio `zrok` con imagen oficial `openziti/zrok:latest` y perfil `--profile zrok`.
+  - Comparte directamente `http://web:80` dentro de la red interna de Docker en modo `--headless`.
+  - Admite reutilizar el entorno habilitado del host montando `${USERPROFILE}/.zrok2` o autenticarse mediante `ZROK_ENABLE_TOKEN` en `.env`.
+- **[Eliminación de la Pantalla de Advertencia Interstitial en Zrok 2]**:
+  - Investigación exhaustiva de la documentación de OpenZiti / Zrok 2 sobre la página de aterrizaje anti-phishing:
+    1. **Verificación de Cuenta en el Portal (Recomendada para Navegadores)**: Ingresar a `https://api.zrok.io` y verificar la cuenta asociando una tarjeta ($0 de cobro). Zrok elimina la pantalla de advertencia automáticamente en todos los shares públicos de esa cuenta.
+    2. **Encabezado HTTP (APIs y Scripts)**: Enviar `skip_zrok_interstitial: true` en las peticiones HTTP.
+    3. **Túneles Privados**: El modo `zrok access private` nunca muestra pantalla intermedia.
+
+
 

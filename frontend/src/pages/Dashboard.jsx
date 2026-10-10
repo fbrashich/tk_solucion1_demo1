@@ -486,8 +486,47 @@ export default function Dashboard() {
       {/* 2. Contenido Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
-        {/* Indicador de Modo de Visualización (Flota vs Equipo) */}
-        {isFleetView ? (
+        {deviceList.length === 0 ? (
+          /* Estado Vacío Elegante para Operadores sin equipos asignados */
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 sm:p-14 text-center max-w-2xl mx-auto shadow-2xl space-y-6 my-8">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shadow-lg shadow-cyan-950/30">
+              <HardDrive className="w-10 h-10" />
+            </div>
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Espacio Privado y Aislado</span>
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight">
+                Bienvenido, <span className="text-cyan-400">{user?.username || 'Operador'}</span>
+              </h2>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
+                Tu cuenta de cliente está activa pero aún no tiene maquinarias asignadas. 
+                En este nodo central, cada operador cuenta con <strong className="text-slate-200">privacidad total</strong>: los equipos y telemetría de otros clientes nunca son visibles en tu sesión.
+              </p>
+            </div>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => setShowAddDeviceModal(true)}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white text-sm font-bold shadow-lg shadow-cyan-950/40 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Registrar Mi Primer Equipo</span>
+              </button>
+              <button
+                onClick={() => fetchAllData(true)}
+                disabled={isRefreshing}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-sm font-semibold border border-slate-700 transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-4 h-4 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Verificar Actualizaciones</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Indicador de Modo de Visualización (Flota vs Equipo) */}
+            {isFleetView ? (
           <div className="bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-500/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
@@ -1030,6 +1069,8 @@ export default function Dashboard() {
           </div>
 
         </div>
+        </>
+        )}
 
       </main>
 

@@ -53,16 +53,10 @@ async def ingest_data(payload: IngestPayload, db: AsyncSession = Depends(get_db)
     )
     db.add(new_event)
 
-    # 4b. Asegurar que el equipo figure en el inventario de dispositivos
-    dev_chk = await db.execute(select(Device).where(Device.device_id == payload.device_id))
-    if not dev_chk.scalars().first():
-        new_dev = Device(
-            device_id=payload.device_id,
-            name=f"Equipo {payload.device_id}",
-            type="Mesa Vibratoria",
-            is_active=True
-        )
-        db.add(new_dev)
+    # 4b. No crear dispositivos huérfanos sin dueño en la ingesta pública
+    # Los dispositivos deben ser dados de alta formalmente por el operador cliente correspondiente.
+    # Si el equipo no está en el catálogo, se guardan sus eventos de telemetría y estado técnico
+    # para que cuando el operador lo dé de alta (por Device ID o Traccar Unique ID) herede sus datos.
 
     # 5. Actualizar estado consolidado del dispositivo
     state_result = await db.execute(
