@@ -47,3 +47,15 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
 - **[Frontend]**: Se implementó una Single Page Application con React 18, React-Router-Dom y Tailwind CSS (@tailwindcss/postcss). El estado de autenticación (JWT) se mantiene en un contexto global (`AuthContext`) apoyado en `localStorage`. El dashboard incluye un mapa Leaflet, un cálculo de estado derivado del estatus y los logs, y se actualiza de forma automática cada 15 segundos mediante *polling*.
 - **[Infraestructura]**: Se diseñó la orquestación en `docker-compose.yml` utilizando Nginx para servir el Frontend y `init_db.py` antes de levantar `uvicorn` en el Backend. Se expusieron los puertos 3000 para web y 8000 para API.
 - **[Simulador]**: Se programó `demo_device.py` para generar datos y enviarlos a `/api/ingest`, facilitando así las pruebas locales del Dashboard en tiempo real, modificando dinámicamente posición e ignición para apreciar las funcionalidades de la SPA.
+
+--------------------------------------------------------------------
+- **[ 10/10/2026 14:54 Nuevas modificaciones ]**
+--------------------------------------------------------------------
+- **[Resolución de Bug Docker]**: Se resolvió el error de build en Vite/Rolldown migrando la imagen base de `frontend/Dockerfile` a `node:22-alpine`, dado que las librerías modernas de bundling requieren `node:util.styleText` (disponible desde Node 20.12+). Se añadió manejo de reintentos asíncronos en `init_db.py` para evitar caídas prematuras por sincronía con PostgreSQL.
+- **[Simulador Standalone]**: Se refactorizó `demo_device.py` reemplazando la dependencia externa `requests` por la librería estándar (`urllib.request` y `json`), permitiendo ejecutar la simulación de telemetría de forma inmediata con cualquier instalación de Python 3 sin necesidad de `pip install`.
+- **[Rediseño UI/UX Industrial]**: Se reestructuró la configuración de Tailwind CSS v4 (`@import "tailwindcss";`), se añadieron fuentes modernas de Google Fonts (*Plus Jakarta Sans* y *JetBrains Mono*) y se rediseñaron integralmente las vistas de Login y Dashboard:
+  - *Login*: Tarjeta glassmorphism, efectos de iluminación ambiental, botón de autocompletado demo (`admin`/`admin123`) y validaciones visuales.
+  - *Dashboard*: Paleta industrial sobria (Dark Slate/Zinc con acentos Esmeralda, Cyan y Ámbar), barra de sincronización con contador regresivo de polling (15s), botón de refresco manual, 4 tarjetas de métricas con indicadores visuales reactivos, mapa con capa CartoDB Dark Matter, trazado de trayectoria GPS (*polyline*), baliza animada radar en tiempo real y tabla de logs con filtrado interactivo.
+
+
+

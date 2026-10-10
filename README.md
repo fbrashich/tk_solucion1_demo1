@@ -18,5 +18,25 @@ La plataforma proporciona un dashboard de "fricción cero" diseñado para usuari
 ## Inicialización
 Para ejecutar el proyecto, asegúrese de tener Docker y Docker Compose instalados, y ejecute en la raíz:
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
+
+### Accesos y Servicios
+Una vez que los contenedores estén levantados:
+- **Frontend (Dashboard):** [http://localhost:3000](http://localhost:3000)
+- **Backend API:** [http://localhost:8000](http://localhost:8000)
+- **Documentación Swagger / OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Credenciales de Acceso
+El script de inicialización crea automáticamente un usuario administrador predeterminado:
+- **Usuario:** `admin`
+- **Contraseña:** `admin123`
+
+### Simulador IoT (Dispositivo Virtual para Demo)
+Para enviar telemetría en tiempo real desde una consola local mientras el dashboard está abierto:
+```bash
+python demo_device.py
+```
+*(Utiliza la librería estándar de Python `urllib`, sin requerir instalación previa de dependencias externas)*.
+El simulador enviará coordenadas y estados de ignición del dispositivo `MESA_01` cada 5 segundos al endpoint `/api/ingest`.
+
