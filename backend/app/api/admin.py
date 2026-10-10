@@ -4,10 +4,11 @@ from sqlalchemy.future import select
 from typing import List
 
 from app.db import get_db
-from app.models.models import User
+from app.models.models import User, Device
 from app.schemas.schemas import User as UserSchema, UserCreate, UserUpdate
 from app.api.deps import get_current_admin
 from app.core.security import get_password_hash
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -18,7 +19,22 @@ async def list_users(
 ):
     result = await db.execute(select(User).order_by(User.id))
     users = result.scalars().all()
-    return users
+    
+    users_with_device_counts = []
+    for u in users:
+        dev_res = await db.execute(
+            select(func.count(Device.id))
+            .where(Device.user_id == u.id, Device.is_active == True)
+        )
+        count = dev_res.scalar() or 0
+        users_with_device_counts.append(UserSchema(
+            id=u.id,
+            username=u.username,
+            role=u.role,
+            is_active=u.is_active,
+            devices_count=count
+        ))
+    return users_with_device_counts
 
 @router.post("/users", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 async def create_user(

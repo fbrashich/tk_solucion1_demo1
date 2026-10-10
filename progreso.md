@@ -107,5 +107,27 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
   - Botón directo "Exportar CSV" en la cabecera y en el panel de eventos para descargar el histórico filtrado.
 - **[Simulador Multi-Dispositivo]**:
   - `demo_device.py` ahora simula en paralelo telemetría para múltiples equipos de la flota (`MESA_01` y `MESA_02`), permitiendo observar en vivo el movimiento sincronizado y los cambios de estado en el mapa.
+- **[Separación Estricta de Dashboard de Admin]**:
+  - El usuario **Super Admin** (`admin`) posee un panel exclusivo (`AdminDashboard.jsx`) dedicado 100% a la gobernanza de cuentas y accesos.
+  - El Administrador **NO ve ningún dispositivo ni mapas ni telemetría operativa** (el endpoint `GET /api/devices` retorna `[]` para admin).
+  - La tabla de cuentas muestra para cada usuario:
+    - Nombre de usuario y estado (Habilitado / Desactivado).
+    - Rol (Administrador / Operador de Planta).
+    - **Cantidad de dispositivos asociados** (`devices_count`), calculada y reflejada en tiempo real.
+    - Acciones para generar nuevas cuentas, cambiar contraseñas, alternar estado o eliminar cuentas.
+- **[Dashboard de Operador: Gestión de Maquinaria y Vinculación Traccar]**:
+  - Se eliminó por completo el bloque redundante de "Acceso rápido:" que duplicaba la funcionalidad del selector desplegable.
+  - El operador puede **dar de alta nuevos dispositivos** mediante el botón "+ Agregar Equipo":
+    - Solicita datos operativos: Código/Alias (`device_id`), Nombre de máquina (`name`), Tipo de maquinaria (`type`), Ubicación (`description`).
+    - **Campos de integración con TRACCAR**:
+      - `traccar_unique_id`: IMEI o ID único del tracker GPS (15 dígitos).
+      - `traccar_model`: Modelo del módem de telemetría (ej. Teltonika FMB920, Queclink GV300, Suntech, ESP32, OsmAnd).
+      - `sim_phone`: N° de chip SIM instalado en el equipo.
+      - `category`: Icono y categoría de maquinaria (machinery, tractor, truck, etc.).
+    - Asocia automáticamente la máquina a la cuenta del operador autenticado (`user_id`).
+  - El operador puede **eliminar dispositivos** directamente desde la vista del equipo con confirmación previa, eliminando también sus registros y actualizando la flota y el conteo del admin.
+- **[Arquitectura e Integración con Traccar]**:
+  - ¿Es Traccar una buena opción?: **Sí, excelente opción**, ya que Traccar es el estándar abierto líder que soporta más de 2.000 protocolos de hardware GPS (Teltonika, Queclink, Suntech, Coban, Concox, ESP32, etc.).
+  - ¿Qué datos solicitar?: Con el **IMEI / Unique ID**, el **Modelo** y el **SIM**, el backend se conecta directamente a los eventos de Traccar (vía Webhook hacia `/api/telemetry/ingest` o consumiendo la API REST de Traccar).
 
 

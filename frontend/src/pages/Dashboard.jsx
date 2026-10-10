@@ -4,7 +4,9 @@ import {
   getDeviceLogs, 
   getAllDevicesStatus, 
   getDevices,
-  exportDeviceLogs 
+  exportDeviceLogs,
+  createDevice,
+  deleteDevice
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -12,12 +14,12 @@ import {
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
   AlertTriangle, WifiOff, Compass, Navigation, 
   Layers, User, ChevronRight, Activity, Download,
-  Shield, ChevronDown, Cpu, FileSpreadsheet, Eye
+  ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
+  Trash2, X, Smartphone, Satellite, Info, HardDrive
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import AdminPanelModal from '../components/AdminPanelModal';
 
 // Formateador humano ("Hace 15 seg", "Hace 3 min")
 function formatTimeAgo(isoString) {
@@ -77,7 +79,7 @@ const createStatusMarkerIcon = (statusStr, isSelected = false) => {
 };
 
 export default function Dashboard() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, logout } = useAuth();
   
   // Selector de dispositivo: 'all' o ID específico (ej. 'MESA_01')
   const [selectedDeviceId, setSelectedDeviceId] = useState('all');
@@ -96,7 +98,26 @@ export default function Dashboard() {
   const [filterIgnition, setFilterIgnition] = useState('all'); // 'all' | 'on' | 'off'
   const [selectedMapCenter, setSelectedMapCenter] = useState(null);
   const [activeMobileTab, setActiveMobileTab] = useState('overview'); // 'overview' | 'logs'
-  const [showAdminModal, setShowAdminModal] = useState(false);
+
+  // Estado para gestión de dispositivos por el Operador
+  const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    device_id: '',
+    name: '',
+    type: 'Mesa Vibratoria',
+    description: '',
+    traccar_unique_id: '',
+    traccar_model: 'Teltonika FMB920',
+    sim_phone: '',
+    category: 'machinery'
+  });
+  const [isAddingDevice, setIsAddingDevice] = useState(false);
+  const [toastNotification, setToastNotification] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToastNotification({ message, type });
+    setTimeout(() => setToastNotification(null), 4000);
+  };
 
   // Carga de inventario de dispositivos y estado global
   const fetchAllData = async (manual = false) => {
@@ -170,9 +191,75 @@ export default function Dashboard() {
       await exportDeviceLogs(selectedDeviceId);
     } catch (err) {
       console.error("Error exportando CSV:", err);
-      alert("No se pudo exportar la telemetría.");
+      showToast("No se pudo exportar la telemetría.", "error");
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  // Alta de nuevo dispositivo con integración Traccar
+  const handleAddDevice = async (e) => {
+    e.preventDefault();
+    if (!newDeviceForm.device_id.trim() || !newDeviceForm.name.trim()) {
+      showToast('Por favor completa el ID y el nombre del equipo', 'error');
+      return;
+    }
+
+    setIsAddingDevice(true);
+    try {
+      const created = await createDevice({
+        device_id: newDeviceForm.device_id.trim().toUpperCase(),
+        name: newDeviceForm.name.trim(),
+        type: newDeviceForm.type.trim() || 'Mesa Vibratoria',
+        description: newDeviceForm.description.trim() || null,
+        is_active: true,
+        traccar_unique_id: newDeviceForm.traccar_unique_id.trim() || null,
+        traccar_model: newDeviceForm.traccar_model.trim() || null,
+        sim_phone: newDeviceForm.sim_phone.trim() || null,
+        category: newDeviceForm.category.trim() || 'machinery'
+      });
+      showToast(`Equipo '${created.device_id}' dado de alta exitosamente.`);
+      setShowAddDeviceModal(false);
+      setNewDeviceForm({
+        device_id: '',
+        name: '',
+        type: 'Mesa Vibratoria',
+        description: '',
+        traccar_unique_id: '',
+        traccar_model: 'Teltonika FMB920',
+        sim_phone: '',
+        category: 'machinery'
+      });
+      setSelectedDeviceId(created.device_id);
+      setSelectedMapCenter(null);
+      await fetchAllData(true);
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || 'Error al dar de alta el dispositivo';
+      showToast(errMsg, 'error');
+    } finally {
+      setIsAddingDevice(false);
+    }
+  };
+
+  // Baja / Eliminación del dispositivo seleccionado
+  const handleDeleteCurrentDevice = async () => {
+    if (selectedDeviceId === 'all') return;
+    const targetObj = deviceList.find(d => d.device_id === selectedDeviceId);
+    const targetName = targetObj ? targetObj.name : selectedDeviceId;
+
+    if (!window.confirm(`¿Estás seguro de que deseas dar de baja y eliminar el equipo '${selectedDeviceId}' (${targetName})? Se eliminarán también sus registros de telemetría.`)) {
+      return;
+    }
+
+    try {
+      await deleteDevice(selectedDeviceId);
+      showToast(`Equipo '${selectedDeviceId}' eliminado correctamente.`);
+      setSelectedDeviceId('all');
+      setSelectedMapCenter(null);
+      await fetchAllData(true);
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || 'Error al eliminar el dispositivo';
+      showToast(errMsg, 'error');
     }
   };
 
@@ -239,7 +326,25 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
       
-      {/* 1. Header Industrial Móvil con Selector y Super Admin */}
+      {/* Notificaciones Flotantes */}
+      {toastNotification && (
+        <div className="fixed top-16 right-6 z-50 max-w-md animate-fade-in">
+          <div className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl text-xs font-medium ${
+            toastNotification.type === 'error'
+              ? 'bg-rose-950/90 border-rose-500/40 text-rose-200 shadow-rose-950/40'
+              : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200 shadow-emerald-950/40'
+          }`}>
+            {toastNotification.type === 'error' ? (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{toastNotification.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* 1. Header Industrial Móvil con Selector y Acciones de Operador */}
       <header className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           
@@ -262,28 +367,52 @@ export default function Dashboard() {
                 <span className="text-cyan-400">• {deviceList.length} en flota</span>
               </label>
 
-              <div className="relative mt-0.5">
-                <select
-                  value={selectedDeviceId}
-                  onChange={(e) => {
-                    setSelectedDeviceId(e.target.value);
-                    setSelectedMapCenter(null);
-                  }}
-                  className="appearance-none bg-slate-950 border border-slate-700/80 hover:border-cyan-500/60 rounded-xl px-3 py-1.5 pr-8 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer shadow-inner min-w-[220px]"
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className="relative">
+                  <select
+                    value={selectedDeviceId}
+                    onChange={(e) => {
+                      setSelectedDeviceId(e.target.value);
+                      setSelectedMapCenter(null);
+                    }}
+                    className="appearance-none bg-slate-950 border border-slate-700/80 hover:border-cyan-500/60 rounded-xl px-3 py-1.5 pr-8 text-xs font-bold text-white focus:outline-none focus:ring-1 focus:ring-cyan-500 cursor-pointer shadow-inner min-w-[210px]"
+                  >
+                    <option value="all">🌐 Toda la Flota (Todos los Equipos)</option>
+                    {deviceList.map((d) => (
+                      <option key={d.device_id} value={d.device_id}>
+                        {d.device_id} • {d.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+
+                {/* Botón "+ Agregar Equipo" para el Operador */}
+                <button
+                  onClick={() => setShowAddDeviceModal(true)}
+                  className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-md shadow-cyan-950/30"
+                  title="Dar de alta una nueva máquina o rastreador Traccar"
                 >
-                  <option value="all">🌐 Toda la Flota (Todos los Equipos)</option>
-                  {deviceList.map((d) => (
-                    <option key={d.device_id} value={d.device_id}>
-                      {d.device_id} • {d.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Agregar Equipo</span>
+                </button>
+
+                {/* Botón "Eliminar Equipo" si hay un equipo individual seleccionado */}
+                {!isFleetView && (
+                  <button
+                    onClick={handleDeleteCurrentDevice}
+                    className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 border border-rose-500/30 text-rose-300 text-xs font-bold transition-all cursor-pointer"
+                    title={`Eliminar ${selectedDeviceId} de la plataforma`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">Eliminar</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Lado Derecho: Acciones, Export CSV, Super Admin, Refresco y Logout */}
+          {/* Lado Derecho: Export CSV, Refresco y Logout */}
           <div className="flex items-center flex-wrap gap-2 shrink-0 justify-between sm:justify-end">
             
             {/* Botón de Exportar Datos CSV */}
@@ -296,18 +425,6 @@ export default function Dashboard() {
               <Download className={`w-3.5 h-3.5 ${isExporting ? 'animate-bounce' : ''}`} />
               <span className="hidden sm:inline">Exportar CSV</span>
             </button>
-
-            {/* Botón Super Admin (Solo para Administradores) */}
-            {isAdmin && (
-              <button
-                onClick={() => setShowAdminModal(true)}
-                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 border border-purple-500/30 text-purple-300 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-purple-950/20"
-                title="Administrar usuarios y dispositivos"
-              >
-                <Shield className="w-3.5 h-3.5 text-purple-400" />
-                <span>Super Admin</span>
-              </button>
-            )}
 
             {/* Botón Refresco Manual */}
             <button
@@ -370,7 +487,7 @@ export default function Dashboard() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
         {/* Indicador de Modo de Visualización (Flota vs Equipo) */}
-        {isFleetView && (
+        {isFleetView ? (
           <div className="bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 border border-cyan-500/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
@@ -389,19 +506,67 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">Acceso rápido:</span>
-              <div className="flex items-center gap-1">
-                {deviceList.slice(0, 3).map(d => (
-                  <button
-                    key={d.device_id}
-                    onClick={() => setSelectedDeviceId(d.device_id)}
-                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 font-mono text-[11px] font-bold cursor-pointer transition-colors"
-                  >
-                    {d.device_id}
-                  </button>
-                ))}
+            <button
+              onClick={() => setShowAddDeviceModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-md shadow-cyan-950/30 shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Agregar Nuevo Dispositivo</span>
+            </button>
+          </div>
+        ) : (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
+                <HardDrive className="w-5 h-5" />
               </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-white">
+                    {currentDeviceObj?.name || singleStatus?.name || selectedDeviceId}
+                  </h3>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
+                    {selectedDeviceId}
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                    {currentDeviceObj?.type || 'Maquinaria'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-1 font-mono">
+                  {currentDeviceObj?.traccar_unique_id && (
+                    <span className="flex items-center gap-1 text-slate-300">
+                      <Satellite className="w-3 h-3 text-cyan-400" />
+                      IMEI Traccar: <strong>{currentDeviceObj.traccar_unique_id}</strong>
+                    </span>
+                  )}
+                  {currentDeviceObj?.traccar_model && (
+                    <span>• GPS: {currentDeviceObj.traccar_model}</span>
+                  )}
+                  {currentDeviceObj?.sim_phone && (
+                    <span>• SIM: {currentDeviceObj.sim_phone}</span>
+                  )}
+                  {currentDeviceObj?.description && (
+                    <span className="font-sans text-slate-400">• {currentDeviceObj.description}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setSelectedDeviceId('all')}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
+              >
+                Ver Toda la Flota
+              </button>
+              <button
+                onClick={handleDeleteCurrentDevice}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold transition-colors cursor-pointer"
+                title="Eliminar este dispositivo de la plataforma"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Dispositivo</span>
+              </button>
             </div>
           </div>
         )}
@@ -881,12 +1046,219 @@ export default function Dashboard() {
         </div>
       </footer>
 
-      {/* Modal de Super Admin para Gestión de Usuarios y Dispositivos */}
-      <AdminPanelModal
-        isOpen={showAdminModal}
-        onClose={() => setShowAdminModal(false)}
-        onDeviceChange={() => fetchAllData(true)}
-      />
+      {/* Modal de Alta de Dispositivo con Integración Traccar */}
+      {showAddDeviceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-slate-100 space-y-5 max-h-[90vh] overflow-y-auto">
+            
+            {/* Header del Modal */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                  <Satellite className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Alta de Dispositivo</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      Compatible Traccar
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">Registra una nueva máquina y asocia su rastreador GPS</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddDeviceModal(false)}
+                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddDevice} className="space-y-4">
+              
+              {/* Sección 1: Datos Operativos */}
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>1. Identificación de la Máquina</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Código / Alias Interno <span className="text-cyan-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ej. MESA_03, PALA_02"
+                      value={newDeviceForm.device_id}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, device_id: e.target.value.toUpperCase() })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white uppercase focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Nombre de la Máquina <span className="text-cyan-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ej. Mesa Concentradora 03"
+                      value={newDeviceForm.name}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, name: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Tipo de Maquinaria
+                    </label>
+                    <select
+                      value={newDeviceForm.type}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, type: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value="Mesa Vibratoria">Mesa Vibratoria</option>
+                      <option value="Mesa Clasificadora">Mesa Clasificadora</option>
+                      <option value="Pala Cargadora Frontal">Pala Cargadora Frontal</option>
+                      <option value="Planta de Lavado">Planta de Lavado</option>
+                      <option value="Generador Diésel">Generador Diésel</option>
+                      <option value="Camión Tolva">Camión Tolva</option>
+                      <option value="Maquinaria Pesada">Maquinaria Pesada</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Ubicación / Sector
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. Sector C - Molienda"
+                      value={newDeviceForm.description}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, description: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 2: Integración con TRACCAR */}
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+                    <Satellite className="w-3.5 h-3.5" />
+                    <span>2. Datos de Integración con TRACCAR</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Conexión GPS
+                  </span>
+                </div>
+
+                <div className="bg-purple-950/20 border border-purple-500/20 rounded-lg p-2.5 text-[11px] text-purple-200/90 leading-relaxed flex items-start gap-2">
+                  <Info className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                  <span>
+                    El <strong>IMEI / Unique ID</strong> es el identificador con el que el hardware GPS reporta al servidor Traccar. Esto vincula automáticamente la señal satelital e ignición.
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      IMEI / Unique ID de Traccar
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. 868204030100004 (15 dígitos)"
+                      value={newDeviceForm.traccar_unique_id}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, traccar_unique_id: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Modelo del Equipo GPS
+                    </label>
+                    <select
+                      value={newDeviceForm.traccar_model}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, traccar_model: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value="Teltonika FMB920">Teltonika FMB920</option>
+                      <option value="Queclink GV300">Queclink GV300</option>
+                      <option value="Suntech ST310">Suntech ST310</option>
+                      <option value="Concox / Jimi">Concox / Jimi VL03</option>
+                      <option value="Coban GPS103">Coban GPS103</option>
+                      <option value="ESP32 Custom">ESP32 Custom / Telemetría</option>
+                      <option value="OsmAnd Protocol">OsmAnd (App Móvil / GPS)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      N° Chip SIM (Teléfono)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. +5491155550004"
+                      value={newDeviceForm.sim_phone}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, sim_phone: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Categoría / Icono Traccar
+                    </label>
+                    <select
+                      value={newDeviceForm.category}
+                      onChange={(e) => setNewDeviceForm({ ...newDeviceForm, category: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value="machinery">Maquinaria de Planta (machinery)</option>
+                      <option value="tractor">Pala / Tractor (tractor)</option>
+                      <option value="truck">Camión Pesado (truck)</option>
+                      <option value="van">Utilitario / Camioneta (van)</option>
+                      <option value="default">General (default)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de Acción */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddDeviceModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingDevice}
+                  className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-xs font-bold text-white shadow-lg shadow-cyan-950/40 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isAddingDevice ? 'Registrando...' : 'Dar de Alta Equipo'}</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

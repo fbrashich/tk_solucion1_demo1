@@ -28,8 +28,13 @@ async def init_db():
             async with engine.begin() as conn:
                 logger.info("Connected to database successfully. Ensuring tables exist...")
                 await conn.run_sync(Base.metadata.create_all)
-                # Migración no destructiva: agregar columna role a users si no existe
+                # Migraciones no destructivas
                 await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'operator';"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS traccar_unique_id VARCHAR;"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS traccar_model VARCHAR;"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS sim_phone VARCHAR;"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS category VARCHAR DEFAULT 'machinery';"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")
@@ -73,26 +78,47 @@ async def init_db():
                 is_active=True
             )
             session.add(aldo_user)
+            await session.flush()
+        else:
+            logger.info("Operator user (aldo) verified.")
 
-        # 3. Asegurar dispositivos iniciales de demo para el selector múltiple
+        # 3. Asegurar dispositivos iniciales de demo para el operador Aldo
         initial_devices = [
-            ("MESA_01", "Mesa Vibratoria Principal", "Mesa Vibratoria", "Sector A - Lavado y Separación"),
-            ("MESA_02", "Mesa Clasificadora 02", "Mesa Clasificadora", "Sector B - Concentración Gravimétrica"),
-            ("PALA_01", "Pala Cargadora Frontal", "Maquinaria Pesada", "Área de Acopio y Alimentación")
+            ("MESA_01", "Mesa Vibratoria Principal", "Mesa Vibratoria", "Sector A - Lavado y Separación", "868204030100001", "Teltonika FMB920", "+5491155550001", "machinery"),
+            ("MESA_02", "Mesa Clasificadora 02", "Mesa Clasificadora", "Sector B - Concentración Gravimétrica", "868204030100002", "Teltonika FMB920", "+5491155550002", "machinery"),
+            ("PALA_01", "Pala Cargadora Frontal", "Maquinaria Pesada", "Área de Acopio y Alimentación", "868204030100003", "Queclink GV300", "+5491155550003", "tractor")
         ]
 
-        for dev_id, name, dev_type, desc in initial_devices:
+        for dev_id, name, dev_type, desc, t_id, t_model, sim, cat in initial_devices:
             dev_res = await session.execute(select(Device).where(Device.device_id == dev_id))
-            if not dev_res.scalars().first():
-                logger.info(f"Seeding default device: {dev_id} ({name})")
+            dev_obj = dev_res.scalars().first()
+            if not dev_obj:
+                logger.info(f"Seeding default device: {dev_id} ({name}) for user {aldo_user.username}")
                 new_dev = Device(
                     device_id=dev_id,
                     name=name,
                     type=dev_type,
                     description=desc,
-                    is_active=True
+                    is_active=True,
+                    user_id=aldo_user.id,
+                    traccar_unique_id=t_id,
+                    traccar_model=t_model,
+                    sim_phone=sim,
+                    category=cat
                 )
                 session.add(new_dev)
+            else:
+                # Actualizar relación con Aldo y datos Traccar si están vacíos
+                if dev_obj.user_id is None:
+                    dev_obj.user_id = aldo_user.id
+                if not dev_obj.traccar_unique_id:
+                    dev_obj.traccar_unique_id = t_id
+                if not dev_obj.traccar_model:
+                    dev_obj.traccar_model = t_model
+                if not dev_obj.sim_phone:
+                    dev_obj.sim_phone = sim
+                if not dev_obj.category:
+                    dev_obj.category = cat
 
         await session.commit()
         logger.info("Seed data applied successfully.")

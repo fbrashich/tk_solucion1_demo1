@@ -14,6 +14,7 @@ class User(BaseModel):
     username: str
     role: str = "operator"
     is_active: bool = True
+    devices_count: int = 0
 
     class Config:
         from_attributes = True
@@ -34,6 +35,10 @@ class DeviceBase(BaseModel):
     type: str = "Mesa Vibratoria"
     description: Optional[str] = None
     is_active: bool = True
+    traccar_unique_id: Optional[str] = None
+    traccar_model: Optional[str] = None
+    sim_phone: Optional[str] = None
+    category: Optional[str] = "machinery"
 
 class DeviceCreate(DeviceBase):
     pass
@@ -43,9 +48,14 @@ class DeviceUpdate(BaseModel):
     type: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    traccar_unique_id: Optional[str] = None
+    traccar_model: Optional[str] = None
+    sim_phone: Optional[str] = None
+    category: Optional[str] = None
 
 class DeviceResponse(DeviceBase):
     id: int
+    user_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
     class Config:
