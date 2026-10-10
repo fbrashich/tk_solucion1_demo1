@@ -56,8 +56,56 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
 - **[Rediseño UI/UX Industrial]**: Se reestructuró la configuración de Tailwind CSS v4 (`@import "tailwindcss";`), se añadieron fuentes modernas de Google Fonts (*Plus Jakarta Sans* y *JetBrains Mono*) y se rediseñaron integralmente las vistas de Login y Dashboard:
   - *Login*: Tarjeta glassmorphism, efectos de iluminación ambiental, botón de autocompletado demo (`admin`/`admin123`) y validaciones visuales.
 - **[Corrección de Capas de Mapa (Sin API Key)]**: Se sustituyeron los mosaicos de CARTO (que requerían API key) por OpenStreetMap con filtro CSS oscuro calibrado nativo, añadiendo además capa satelital Esri y estándar sin restricciones de clave.
-- **[Sincronización de Red y Healthcheck Docker]**: Se configuró un healthcheck de PostgreSQL (`pg_isready -U postgres`) en `docker-compose.yml` junto con la condición `service_healthy` en la API. Además, en `init_db.py` se implementó la recreación limpia del motor de SQLAlchemy por intento, eliminando el fallo transitorio de resolución DNS (`socket.gaierror: [Errno -3] Temporary failure in name resolution`) durante el arranque en frío.
+--------------------------------------------------------------------
+- **[ 10/10/2026 Refactor Fullstack: Lógica, Red Unificada y UX Móvil para Aldo ]**
+--------------------------------------------------------------------
+- **[Corrección de Lógica de Estado (Bug Ignition ON vs APAGADO)]**:
+  - Se eliminó la divergencia entre el indicador de ignición y el estado operativo general.
+  - En `backend/app/api/devices.py` y `schemas.py`, el estado se deriva canónicamente bajo UTC estricto (`datetime.timezone.utc`):
+    - `OPERANDO` (Verde): si `ignition == true` y el reporte ocurrió dentro de los últimos 5 minutos.
+    - `DETENIDA` (Ámbar): si `ignition == false` dentro del rango de reporte (<= 10 min).
+    - `SIN COMUNICACIÓN`: si el último reporte excede los 10 minutos respecto a `now(timezone.utc)`.
+- **[Cálculo de Horómetro Robusto]**:
+  - En `backend/app/api/ingest.py`, se refactorizó la ingesta para que el cálculo acumulativo del horómetro se base exclusivamente en el delta de tiempo físico entre eventos consecutivos (`event.timestamp - prev_event.timestamp`), desacoplándolo del momento de recepción HTTP en el servidor.
+- **[Seguridad en Docker Compose]**:
+  - Se eliminó la exposición del puerto `5432:5432` de PostgreSQL hacia el host. La base de datos ahora reside de forma segura en la red interna de Docker (`telemetry_net`), accesible únicamente por el contenedor `telemetry_api`.
+- **[Unificación de Red con Proxy Reverso Nginx]**:
+  - Se eliminaron las llamadas directas a `localhost:8000` en el Frontend; ahora React utiliza rutas relativas (`/api/...`).
+  - Se configuró `frontend/nginx.conf` como reverse proxy hacia `http://api:8000/api/` con headers estándar (`Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`), más proxys para `/docs` y `/openapi.json`.
+  - Todo el tráfico queda centralizado en el puerto 3000, facilitando el despliegue con túneles inversos (ej. Zrok, ngrok o Cloudflare Tunnels).
+- **[Rediseño UI/UX Industrial Móvil para Aldo]**:
+  - Interfaz orientada a usuario no técnico (operador/planta):
+    - Tarjeta principal de estado grande y sin ambigüedades (OPERANDO, DETENIDA, SIN COMUNICACIÓN).
+    - Horómetro con desglose legible en horas y minutos (ej. "14 hs 28 min").
+    - Diseño responsive táctil (botones >= 44px) con selector móvil rápido ("Estado & Mapa" / "Historial").
+    - Marcador baliza en Leaflet con colores acordes al estado y filtros rápidos en la tabla de eventos.
+- **[Simulador Actualizado]**:
+  - `demo_device.py` ahora transmite marcas temporales físicas ISO en UTC y apunta al puerto unificado `http://localhost:3000/api/ingest`.
 
-
+--------------------------------------------------------------------
+- **[ 10/10/2026 Multidispositivo, Mapa de Flota, Super Admin y Export CSV ]**
+--------------------------------------------------------------------
+- **[CRUD de Dispositivos (Alta, Baja, Modificación)]**:
+  - Se formalizó el modelo `Device` en `models.py` (`device_id`, `name`, `type`, `description`, `is_active`, `created_at`).
+  - Endpoints REST en `devices.py`:
+    - `GET /api/devices`: Listado de equipos registrados.
+    - `POST /api/devices`: Alta de nuevo equipo.
+    - `PUT /api/devices/{device_id}`: Modificación de nombre, tipo, descripción o estado.
+    - `DELETE /api/devices/{device_id}`: Baja / eliminación de dispositivo.
+    - Auto-registro en `ingest.py`: si un hardware transmite por primera vez, se añade automáticamente al inventario.
+- **[Selector Desplegable y Visualización Multidispositivo en Mapa]**:
+  - Se incorporó un selector desplegable en la barra de control para conmutar entre **"Toda la Flota"** o cualquier equipo específico (`MESA_01`, `MESA_02`, etc.).
+  - **Visualización en el mismo mapa**: En la vista de flota, el mapa renderiza simultáneamente las balizas radar de **todos los dispositivos activos**, cada uno con su color de estado operativo (`OPERANDO` verde, `DETENIDA` ámbar, `SIN COMUNICACIÓN` rojo), popup con métricas y botón de enfoque directo.
+  - Al seleccionar un equipo individual, se dibuja su trayectoria GPS (`Polyline`) y sus logs específicos.
+- **[Dashboard de Super Admin]**:
+  - Se incorporó la columna `role` (`admin` / `operator`) en el modelo `User`.
+  - Componente `AdminPanelModal.jsx` accesible para administradores autenticados:
+    - **Gestión de Cuentas**: Generar usuarios, definir contraseñas, asignar roles (Super Admin / Operador), suspender/activar cuentas y eliminar accesos.
+    - **Gestión de Equipos**: Alta rápida de dispositivos, edición de metadatos de maquinaria y baja de equipos.
+- **[Export de Datos Telemetría]**:
+  - Endpoint `GET /api/devices/{device_id}/export?format=csv` con streaming de archivo CSV descargable.
+  - Botón directo "Exportar CSV" en la cabecera y en el panel de eventos para descargar el histórico filtrado.
+- **[Simulador Multi-Dispositivo]**:
+  - `demo_device.py` ahora simula en paralelo telemetría para múltiples equipos de la flota (`MESA_01` y `MESA_02`), permitiendo observar en vivo el movimiento sincronizado y los cambios de estado en el mapa.
 
 

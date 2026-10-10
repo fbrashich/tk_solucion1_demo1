@@ -3,6 +3,7 @@ import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
+from sqlalchemy import text
 import os
 import sys
 
@@ -10,7 +11,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.db import Base
-from app.models.models import User
+from app.models.models import User, Device
 from app.core.config import settings
 from app.core.security import get_password_hash
 
@@ -27,6 +28,8 @@ async def init_db():
             async with engine.begin() as conn:
                 logger.info("Connected to database successfully. Ensuring tables exist...")
                 await conn.run_sync(Base.metadata.create_all)
+                # Migración no destructiva: agregar columna role a users si no existe
+                await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'operator';"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")
@@ -37,26 +40,62 @@ async def init_db():
                 raise
             await asyncio.sleep(2)
 
-    # Insertar usuario por defecto admin/admin123
     async_session = sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False
     )
 
     async with async_session() as session:
+        # 1. Asegurar usuario Super Admin (admin / admin123)
         result = await session.execute(select(User).where(User.username == "admin"))
-        user = result.scalars().first()
-        if not user:
-            logger.info("Creating default admin user...")
-            new_user = User(
+        admin_user = result.scalars().first()
+        if not admin_user:
+            logger.info("Creating default Super Admin user (admin)...")
+            admin_user = User(
                 username="admin",
                 hashed_password=get_password_hash("admin123"),
+                role="admin",
                 is_active=True
             )
-            session.add(new_user)
-            await session.commit()
-            logger.info("Admin user created successfully.")
+            session.add(admin_user)
         else:
-            logger.info("Admin user already exists.")
+            admin_user.role = "admin"
+            logger.info("Admin user verified.")
+
+        # 2. Asegurar usuario Operador (aldo / aldo123)
+        res_aldo = await session.execute(select(User).where(User.username == "aldo"))
+        aldo_user = res_aldo.scalars().first()
+        if not aldo_user:
+            logger.info("Creating default operator user (aldo)...")
+            aldo_user = User(
+                username="aldo",
+                hashed_password=get_password_hash("aldo123"),
+                role="operator",
+                is_active=True
+            )
+            session.add(aldo_user)
+
+        # 3. Asegurar dispositivos iniciales de demo para el selector múltiple
+        initial_devices = [
+            ("MESA_01", "Mesa Vibratoria Principal", "Mesa Vibratoria", "Sector A - Lavado y Separación"),
+            ("MESA_02", "Mesa Clasificadora 02", "Mesa Clasificadora", "Sector B - Concentración Gravimétrica"),
+            ("PALA_01", "Pala Cargadora Frontal", "Maquinaria Pesada", "Área de Acopio y Alimentación")
+        ]
+
+        for dev_id, name, dev_type, desc in initial_devices:
+            dev_res = await session.execute(select(Device).where(Device.device_id == dev_id))
+            if not dev_res.scalars().first():
+                logger.info(f"Seeding default device: {dev_id} ({name})")
+                new_dev = Device(
+                    device_id=dev_id,
+                    name=name,
+                    type=dev_type,
+                    description=desc,
+                    is_active=True
+                )
+                session.add(new_dev)
+
+        await session.commit()
+        logger.info("Seed data applied successfully.")
 
     await engine.dispose()
 

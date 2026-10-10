@@ -10,21 +10,72 @@ class TokenData(BaseModel):
     username: str | None = None
 
 class User(BaseModel):
+    id: Optional[int] = None
     username: str
+    role: str = "operator"
+    is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "operator"
+
+class UserUpdate(BaseModel):
+    password: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class DeviceBase(BaseModel):
+    device_id: str
+    name: str
+    type: str = "Mesa Vibratoria"
+    description: Optional[str] = None
+    is_active: bool = True
+
+class DeviceCreate(DeviceBase):
+    pass
+
+class DeviceUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class DeviceResponse(DeviceBase):
+    id: int
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class IngestPayload(BaseModel):
     device_id: str
     lat: float
     lon: float
     ignition: bool
+    timestamp: Optional[datetime] = None
 
 class DeviceStatusResponse(BaseModel):
     device_id: str
-    status: str # "conectado" o "desconectado"
+    name: Optional[str] = None
+    type: Optional[str] = None
+    status: str # "OPERANDO" | "DETENIDA" | "SIN COMUNICACIÓN"
+    ignition: Optional[bool] = None
     last_lat: Optional[float] = None
     last_lon: Optional[float] = None
     engine_hours: float
     last_updated: Optional[datetime] = None
+
+class FleetSummaryResponse(BaseModel):
+    total_devices: int
+    operating_count: int
+    detained_count: int
+    no_comm_count: int
+    total_engine_hours: float
+    devices: list[DeviceStatusResponse]
 
 class TelemetryEventResponse(BaseModel):
     id: int

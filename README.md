@@ -21,22 +21,34 @@ Para ejecutar el proyecto, asegúrese de tener Docker y Docker Compose instalado
 docker compose up --build
 ```
 
-### Accesos y Servicios
-Una vez que los contenedores estén levantados:
-- **Frontend (Dashboard):** [http://localhost:3000](http://localhost:3000)
-- **Backend API:** [http://localhost:8000](http://localhost:8000)
-- **Documentación Swagger / OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+### Accesos y Servicios (Tráfico Unificado en Puerto 3000)
+Una vez que los contenedores estén levantados, **todo el tráfico está unificado a través del proxy reverso Nginx en el puerto 3000**, ideal para despliegues con túneles inversos (Zrok, ngrok, Cloudflare Tunnels):
+- **Dashboard Web (SPA Industrial):** [http://localhost:3000](http://localhost:3000)
+- **API Backend (Proxy Reverso):** [http://localhost:3000/api](http://localhost:3000/api)
+- **Documentación Swagger / OpenAPI:** [http://localhost:3000/docs](http://localhost:3000/docs)
+- **Seguridad DB:** La base de datos PostgreSQL **no** expone puertos hacia el host; opera exclusivamente en la red interna de Docker comunicada con el servicio `api`.
 
 ### Credenciales de Acceso
-El script de inicialización crea automáticamente un usuario administrador predeterminado:
-- **Usuario:** `admin`
-- **Contraseña:** `admin123`
+El script de inicialización crea automáticamente dos cuentas listas para usar:
+1. **Super Administrador:**
+   - **Usuario:** `admin` | **Contraseña:** `admin123`
+   - *Capacidades:* Control total, acceso al panel de gestión de cuentas (alta/baja de usuarios), alta/baja/modificación de maquinaria y exportación de telemetría.
+2. **Operador Industrial (Aldo):**
+   - **Usuario:** `aldo` | **Contraseña:** `aldo123`
+   - *Capacidades:* Monitoreo en vivo de equipos, mapas de flota, horómetros, registro de eventos y exportación de datos.
 
-### Simulador IoT (Dispositivo Virtual para Demo)
-Para enviar telemetría en tiempo real desde una consola local mientras el dashboard está abierto:
-```bash
-python demo_device.py
-```
-*(Utiliza la librería estándar de Python `urllib`, sin requerir instalación previa de dependencias externas)*.
-El simulador enviará coordenadas y estados de ignición del dispositivo `MESA_01` cada 5 segundos al endpoint `/api/ingest`.
+### Nuevas Funcionalidades Implementadas
+- **Visualización Multidispositivo en el Mismo Mapa:**
+  - Selector desplegable en la barra superior para alternar entre la vista de **Toda la Flota** o un equipo específico (`MESA_01`, `MESA_02`, `PALA_01`, etc.).
+  - En la vista de flota, el mapa renderiza simultáneamente las balizas de todos los equipos con su color según el estado operativo (`OPERANDO` verde, `DETENIDA` ámbar, `SIN COMUNICACIÓN` rojo).
+- **CRUD de Dispositivos (Alta, Baja y Modificación):**
+  - Registro de nuevos equipos de planta con código de hardware, nombre legible, tipo de maquinaria y sector.
+  - Modificación de metadatos y baja de equipos.
+- **Panel de Super Administrador:**
+  - Ventana modal de administración accesible con un clic para cuentas de rol `admin`.
+  - Permite dar de alta nuevos operadores, suspender/activar cuentas, asignar permisos y resetear accesos.
+- **Exportación de Datos a CSV:**
+  - Descarga instantánea de reportes de telemetría históricos en formato `.csv` con marcas temporales UTC, estados de ignición y coordenadas GPS.
+- **Simulador Multi-Dispositivo:**
+  - `python demo_device.py` transmite en vivo y en paralelo para múltiples máquinas (`MESA_01` y `MESA_02`), permitiendo observar el movimiento sincronizado y el comportamiento en el mapa.
 

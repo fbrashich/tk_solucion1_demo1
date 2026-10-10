@@ -1,67 +1,78 @@
 import time
 import json
 import math
+import datetime
 import urllib.request
 import urllib.error
 
-API_URL = "http://localhost:8000/api/ingest"
-DEVICE_ID = "MESA_01"
+API_URL = "http://localhost:3000/api/ingest"
 
-# Iniciar cerca de San Juan, Argentina (-31.53, -68.52)
-LAT_START = -31.53
-LON_START = -68.52
-
-print(f"Iniciando simulador IoT para el dispositivo: {DEVICE_ID}")
-print(f"Apuntando a: {API_URL}")
-print("-" * 40)
-
-def generate_payload(step):
-    # Simular un movimiento en círculo o espiral pequeña
-    lat_offset = math.sin(step / 10.0) * 0.01
-    lon_offset = math.cos(step / 10.0) * 0.01
-
-    # Simular encendido durante 20 ciclos, luego apagado por 5 ciclos
-    ignition = (step % 25) < 20
-
-    return {
-        "device_id": DEVICE_ID,
-        "lat": LAT_START + lat_offset,
-        "lon": LON_START + lon_offset,
-        "ignition": ignition
+# Dispositivos de la flota a simular en paralelo
+DEVICES = [
+    {
+        "device_id": "MESA_01",
+        "name": "Mesa Vibratoria Principal",
+        "lat_base": -31.5300,
+        "lon_base": -68.5200,
+        "cycle_period": 25,
+        "on_cycles": 20
+    },
+    {
+        "device_id": "MESA_02",
+        "name": "Mesa Clasificadora 02",
+        "lat_base": -31.5420,
+        "lon_base": -68.5350,
+        "cycle_period": 20,
+        "on_cycles": 14
     }
+]
+
+print("=" * 60)
+print("INICIANDO SIMULADOR IOT MULTI-DISPOSITIVO")
+print(f"Apuntando a: {API_URL} (Proxy Nginx)")
+print(f"Equipos simulados: {', '.join([d['device_id'] for d in DEVICES])}")
+print("=" * 60)
+
+def send_payload(payload):
+    try:
+        req_data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            API_URL,
+            data=req_data,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return response.getcode() == 200
+    except Exception as e:
+        return False
 
 step = 0
 try:
     while True:
-        payload = generate_payload(step)
-        print(f"[{step}] Enviando: {payload}", end="", flush=True)
+        now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
+        for dev in DEVICES:
+            lat_offset = math.sin((step + (hash(dev['device_id']) % 10)) / 10.0) * 0.008
+            lon_offset = math.cos((step + (hash(dev['device_id']) % 10)) / 10.0) * 0.008
+            
+            ignition = (step % dev["cycle_period"]) < dev["on_cycles"]
 
-        try:
-            req_data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(
-                API_URL,
-                data=req_data,
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=5) as response:
-                status_code = response.getcode()
-                if status_code == 200:
-                    print(" -> OK")
-                else:
-                    body = response.read().decode("utf-8")
-                    print(f" -> ERROR: {status_code} - {body}")
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8")
-            print(f" -> ERROR HTTP: {e.code} - {body}")
-        except urllib.error.URLError as e:
-            print(f" -> ERROR CONEXIÓN: {e.reason}")
-        except Exception as e:
-            print(f" -> ERROR: {e}")
+            payload = {
+                "device_id": dev["device_id"],
+                "lat": dev["lat_base"] + lat_offset,
+                "lon": dev["lon_base"] + lon_offset,
+                "ignition": ignition,
+                "timestamp": now_utc
+            }
+
+            ok = send_payload(payload)
+            status_tag = "ON " if ignition else "OFF"
+            result_tag = "OK" if ok else "ERR"
+            print(f"[{step}] {dev['device_id']} ({status_tag}) -> {result_tag} | GPS: {payload['lat']:.4f}, {payload['lon']:.4f}")
 
         step += 1
-        # Esperar 5 segundos entre reportes para generar data rápido en la demo
         time.sleep(5)
 
 except KeyboardInterrupt:
-    print("\nSimulador detenido.")
+    print("\nSimulador multi-dispositivo detenido.")
