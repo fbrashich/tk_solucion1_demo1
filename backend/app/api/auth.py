@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 
 from app.core.config import settings
 from app.core.security import verify_password, create_access_token
@@ -20,7 +21,10 @@ async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(User).where(User.username == form_data.username))
+    clean_username = form_data.username.strip()
+    result = await db.execute(
+        select(User).where(func.lower(User.username) == clean_username.lower())
+    )
     user = result.scalars().first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):

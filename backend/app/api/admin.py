@@ -42,16 +42,19 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin)
 ):
-    # Verificar si el usuario ya existe
-    existing_res = await db.execute(select(User).where(User.username == payload.username.strip()))
+    clean_username = payload.username.strip()
+    # Verificar si el usuario ya existe (insensible a mayúsculas/minúsculas)
+    existing_res = await db.execute(
+        select(User).where(func.lower(User.username) == clean_username.lower())
+    )
     if existing_res.scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El nombre de usuario '{payload.username}' ya se encuentra registrado."
+            detail=f"El nombre de usuario '{clean_username}' ya se encuentra registrado."
         )
 
     new_user = User(
-        username=payload.username.strip(),
+        username=clean_username,
         hashed_password=get_password_hash(payload.password),
         role=payload.role if payload.role in ["admin", "operator"] else "operator",
         is_active=True
@@ -59,7 +62,13 @@ async def create_user(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
-    return new_user
+    return UserSchema(
+        id=new_user.id,
+        username=new_user.username,
+        role=new_user.role,
+        is_active=new_user.is_active,
+        devices_count=0
+    )
 
 @router.put("/users/{user_id}", response_model=UserSchema)
 async def update_user(
@@ -89,7 +98,20 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
-    return user
+
+    dev_res = await db.execute(
+        select(func.count(Device.id))
+        .where(Device.user_id == user.id, Device.is_active == True)
+    )
+    count = dev_res.scalar() or 0
+
+    return UserSchema(
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        is_active=user.is_active,
+        devices_count=count
+    )
 
 @router.delete("/users/{user_id}")
 async def delete_user(

@@ -310,7 +310,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 p-4">
         <div className="w-14 h-14 border-4 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin mb-4" />
         <h2 className="text-base font-bold text-white tracking-wide">Conectando con la Flota de Telemetría...</h2>
-        <p className="text-xs text-slate-400 mt-1">Cargando dispositivos para Aldo</p>
+        <p className="text-xs text-slate-400 mt-1">Cargando dispositivos para {user?.username || 'Operador'}</p>
       </div>
     );
   }
@@ -440,7 +440,7 @@ export default function Dashboard() {
             {/* Usuario / Salir */}
             <div className="flex items-center gap-1.5 pl-1 border-l border-slate-800">
               <span className="text-xs text-slate-400 font-medium hidden lg:inline px-1">
-                {user?.username || 'aldo'}
+                {user?.username || 'Operador'}
               </span>
               <button
                 onClick={logout}

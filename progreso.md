@@ -169,5 +169,17 @@ Este documento funciona como un registro del avance del proyecto y de las decisi
   - **25 / 25 Pruebas Aprobadas (100% PASS - Cero Vulnerabilidades - Cero Advertencias)**.
   - Reporte consolidado y tabla de seguimiento cronológico guardados en `pentesting.md`.
 
-
-
+--------------------------------------------------------------------
+- **[ 10/10/2026 Resiliencia en Gestión de Cuentas, Tolerancia Case-Insensitive y Estabilización de Proxy ]**
+--------------------------------------------------------------------
+- **[Diagnóstico de la Incidencia]**:
+  1. Las credenciales de operadores fallaban al ingresar en móviles o teclados con mayúscula inicial (`Aldo` o `Demo1`) o espacios involuntarios al final.
+  2. En el panel de Super Admin, al crear cuentas a través de proxies reversos/Zrok, la petición HTTP `POST /api/admin/users` creaba el usuario en la base de datos pero la conexión podía quedar pendiente por falta de directivas de keepalive HTTP/1.1 y ausencia de timeout en Axios, dejando el botón congelado en "Creando...".
+- **[Soluciones Implementadas]**:
+  1. **Autenticación Case-Insensitive & Trim**: Endpoint `/api/auth/login` ahora compara con `func.lower(User.username) == clean_username.lower()` y limpia espacios, admitiendo `aldo`, `Aldo`, `demo1`, `Demo1`.
+  2. **Timeout y Control en Axios**: Configuración de `timeout: 15000` e interceptores de respuesta para evitar promesas colgadas.
+  3. **Directivas HTTP/1.1 en Nginx**: Configuración de `proxy_http_version 1.1;`, `proxy_set_header Upgrade $http_upgrade;`, `proxy_set_header Connection "upgrade";` y timeouts de 60s en `nginx.conf`.
+  4. **Serialización Consistente en Backend**: Endpoints `POST /api/admin/users` y `PUT /api/admin/users/{id}` devuelven explícitamente `UserSchema` con `devices_count` calculado.
+  5. **Mejora de UX en Login**: Botones de acceso rápido para las 3 cuentas (`admin / admin123`, `aldo / aldo123`, `demo1 / demo123`) para pruebas inmediatas sin errores de tipeo.
+- **[Verificación Automatizada]**:
+  - Suite de verificación ejecutada con 100% PASS sobre puerto unificado 3000. Cuentas creadas, autenticadas y eliminadas limpiamente.

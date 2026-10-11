@@ -13,22 +13,26 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleFillDemo = () => {
-    setUsername('admin');
-    setPassword('admin123');
+  const handleFillAccount = (user, pass) => {
+    setUsername(user);
+    setPassword(pass);
     setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const cleanUser = username.trim();
+    if (!cleanUser || !password) return;
     setError('');
     setIsLoading(true);
     try {
-      const data = await loginCall(username, password);
+      const data = await loginCall(cleanUser, password);
       login(data.access_token);
       navigate('/dashboard');
     } catch (err) {
-      setError('Credenciales incorrectas. Verifique el usuario y contraseña.');
+      console.error('Error de autenticación:', err);
+      const errMsg = err.response?.data?.detail || 'Credenciales incorrectas. Verifique el usuario y contraseña.';
+      setError(errMsg);
     } finally {
       setIsLoading(false);
     }
@@ -137,19 +141,51 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Botón de auto-rellenado para demo */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80">
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-slate-950/60 border border-slate-800/90 text-xs text-slate-400 hover:text-cyan-300 hover:border-cyan-500/40 transition-all cursor-pointer group"
-            >
-              <span className="flex items-center gap-2 font-mono">
-                <KeyRound className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400" />
-                <span>Demo: admin / admin123</span>
-              </span>
-              <span className="text-[11px] text-cyan-400/80 underline font-medium">Autocompletar</span>
-            </button>
+          {/* Botones de auto-rellenado para pruebas rápidas */}
+          <div className="mt-6 pt-5 border-t border-slate-800/80 space-y-2">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+              Acceso Rápido / Cuentas Disponibles:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleFillAccount('admin', 'admin123')}
+                className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-purple-950/40 border border-purple-800/40 text-[11px] text-purple-300 hover:bg-purple-900/40 transition-all cursor-pointer text-left"
+                title="Super Admin - Gestiona usuarios"
+              >
+                <div>
+                  <span className="font-bold block">admin</span>
+                  <span className="text-[9px] text-purple-400 font-mono">admin123</span>
+                </div>
+                <span className="text-[9px] bg-purple-500/20 px-1.5 py-0.5 rounded text-purple-300">Admin</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleFillAccount('aldo', 'aldo123')}
+                className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-[11px] text-cyan-300 hover:bg-cyan-900/40 transition-all cursor-pointer text-left"
+                title="Operador Aldo - Dispositivos de planta"
+              >
+                <div>
+                  <span className="font-bold block">aldo</span>
+                  <span className="text-[9px] text-cyan-400 font-mono">aldo123</span>
+                </div>
+                <span className="text-[9px] bg-cyan-500/20 px-1.5 py-0.5 rounded text-cyan-300">Operador</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleFillAccount('demo1', 'demo123')}
+                className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-[11px] text-emerald-300 hover:bg-emerald-900/40 transition-all cursor-pointer text-left"
+                title="Operador Demo1 - Flota independiente"
+              >
+                <div>
+                  <span className="font-bold block">demo1</span>
+                  <span className="text-[9px] text-emerald-400 font-mono">demo123</span>
+                </div>
+                <span className="text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300">Operador</span>
+              </button>
+            </div>
           </div>
         </div>
 

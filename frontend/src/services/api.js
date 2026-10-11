@@ -5,6 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 15000, // Previene cuelgues de red o promesas bloqueadas
 });
 
 // Interceptor para agregar JWT a las requests
@@ -16,13 +17,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Interceptor para manejar tokens expirados automáticamente
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      const isLoginPath = window.location.pathname.includes('/login');
+      if (!isLoginPath) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ==========================================
 // AUTENTICACIÓN
 // ==========================================
 
 export const loginCall = async (username, password) => {
   const params = new URLSearchParams();
-  params.append('username', username);
+  params.append('username', username.trim());
   params.append('password', password);
   const response = await api.post('/auth/login', params, {
     headers: {

@@ -57,26 +57,35 @@ export default function AdminDashboard() {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!newUsername.trim() || !newPassword.trim()) {
+    const cleanUsername = newUsername.trim();
+    const cleanPassword = newPassword.trim();
+
+    if (!cleanUsername || !cleanPassword) {
       showToast('Por favor completa el nombre de usuario y contraseña', 'error');
+      return;
+    }
+
+    if (cleanPassword.length < 6) {
+      showToast('La contraseña debe tener al menos 6 caracteres', 'error');
       return;
     }
 
     setIsSubmitting(true);
     try {
       await createAdminUser({
-        username: newUsername.trim(),
-        password: newPassword.trim(),
+        username: cleanUsername,
+        password: cleanPassword,
         role: newRole
       });
-      showToast(`Cuenta '${newUsername.trim()}' creada exitosamente`);
+      showToast(`Cuenta '${cleanUsername}' creada exitosamente`);
       setShowCreateModal(false);
       setNewUsername('');
       setNewPassword('');
       setNewRole('operator');
       await loadUsers();
     } catch (err) {
-      const errMsg = err.response?.data?.detail || 'Error al generar la cuenta de acceso';
+      console.error('Error al generar la cuenta:', err);
+      const errMsg = err.response?.data?.detail || err.message || 'Error al generar la cuenta de acceso';
       showToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
@@ -100,15 +109,21 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!passwordModalUser || !updatedPassword.trim()) return;
 
+    if (updatedPassword.trim().length < 6) {
+      showToast('La nueva contraseña debe tener al menos 6 caracteres', 'error');
+      return;
+    }
+
     try {
       await updateAdminUser(passwordModalUser.id, {
         password: updatedPassword.trim()
       });
-      showToast(`Contraseña de '${passwordModalUser.username}' actualizada`);
+      showToast(`Contraseña de '${passwordModalUser.username}' actualizada exitosamente`);
       setPasswordModalUser(null);
       setUpdatedPassword('');
+      await loadUsers();
     } catch (err) {
-      const errMsg = err.response?.data?.detail || 'Error al actualizar contraseña';
+      const errMsg = err.response?.data?.detail || err.message || 'Error al actualizar contraseña';
       showToast(errMsg, 'error');
     }
   };
