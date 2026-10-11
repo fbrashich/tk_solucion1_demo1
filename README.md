@@ -59,21 +59,20 @@ El script de inicialización crea automáticamente dos cuentas listas para usar:
 
 ---
 
-## Despliegue con Túnel Inverso Zrok en Docker
+## Despliegue con Túnel Inverso Zrok 2 (URL Fija Reservada)
 
-La plataforma incluye soporte nativo para ejecutar **Zrok** como servicio dentro de Docker Compose sin necesidad de abrir consolas manuales adicionales.
+La plataforma cuenta con un nombre reservado permanente en **Zrok 2**:
 
-### 1. Iniciar Zrok automáticamente con Docker Compose
-Si ya tienes `zrok` habilitado en tu máquina host (`~/.zrok2` en Windows/Linux):
-```bash
-docker compose --profile zrok up -d
-```
-Docker Compose montará tu sesión de zrok y compartirá automáticamente `http://web:80` en segundo plano.
+* **URL Pública Fija**: [https://tk-iot-demo.shares.zrok.io](https://tk-iot-demo.shares.zrok.io)
+* **Destino Local**: `http://localhost:3000` (Nginx unificado en Docker)
 
-Para ver la URL pública generada por Zrok:
-```bash
-docker compose logs zrok
-```
+### 1. Iniciar el Túnel Zrok
+Puedes ejecutar el túnel en cualquier momento con:
+* **Doble clic en**: `start_zrok.bat`
+* O por consola:
+  ```powershell
+  & "C:\zrok_2.0.8_windows_amd64\zrok2.exe" share public http://localhost:3000 -n public:tk-iot-demo --headless
+  ```
 
 ### 2. Cómo remover la pantalla de advertencia inicial (Página Interstitial de Zrok 2)
 En las versiones recientes de Zrok 2, los enlaces públicos muestran una pantalla de cortesía anti-phishing antes de redirigir al sitio web. Para eliminarla:
