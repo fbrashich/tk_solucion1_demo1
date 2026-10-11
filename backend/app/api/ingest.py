@@ -43,13 +43,17 @@ async def ingest_data(payload: IngestPayload, db: AsyncSession = Depends(get_db)
             if delta_seconds <= 86400:
                 delta_hours = delta_seconds / 3600.0
 
-    # 4. Registrar nuevo evento de telemetría con su marca temporal física
+    # 4. Registrar nuevo evento de telemetría con su marca temporal física y datos completos
     new_event = TelemetryEvent(
         device_id=payload.device_id,
         latitude=payload.lat,
         longitude=payload.lon,
         ignition_state=payload.ignition,
-        timestamp=event_timestamp
+        timestamp=event_timestamp,
+        speed=payload.speed,
+        altitude=payload.altitude,
+        course=payload.course,
+        raw_data=payload.raw_data
     )
     db.add(new_event)
 
@@ -71,7 +75,11 @@ async def ingest_data(payload: IngestPayload, db: AsyncSession = Depends(get_db)
             engine_hours=delta_hours,
             last_ignition_state=payload.ignition,
             last_ignition_on_time=event_timestamp if payload.ignition else None,
-            last_updated=event_timestamp
+            last_updated=event_timestamp,
+            last_latitude=payload.lat,
+            last_longitude=payload.lon,
+            last_speed=payload.speed,
+            last_raw_data=payload.raw_data
         )
         db.add(device_state)
     else:
@@ -83,6 +91,10 @@ async def ingest_data(payload: IngestPayload, db: AsyncSession = Depends(get_db)
         else:
             device_state.last_ignition_on_time = None
         device_state.last_updated = event_timestamp
+        device_state.last_latitude = payload.lat
+        device_state.last_longitude = payload.lon
+        device_state.last_speed = payload.speed
+        device_state.last_raw_data = payload.raw_data
 
     await db.commit()
     return {

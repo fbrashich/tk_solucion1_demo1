@@ -95,6 +95,10 @@ class IngestPayload(BaseModel):
     lon: float = Field(..., ge=-180.0, le=180.0, description="Longitud WGS84 válida entre -180 y 180")
     ignition: bool
     timestamp: Optional[datetime] = None
+    speed: Optional[float] = None
+    altitude: Optional[float] = None
+    course: Optional[float] = None
+    raw_data: Optional[dict] = None
 
 class DeviceStatusResponse(BaseModel):
     device_id: str
@@ -106,6 +110,8 @@ class DeviceStatusResponse(BaseModel):
     last_lon: Optional[float] = None
     engine_hours: float
     last_updated: Optional[datetime] = None
+    last_speed: Optional[float] = None
+    raw_data: Optional[dict] = None
 
 class FleetSummaryResponse(BaseModel):
     total_devices: int
@@ -122,6 +128,10 @@ class TelemetryEventResponse(BaseModel):
     latitude: float
     longitude: float
     ignition_state: bool
+    speed: Optional[float] = None
+    altitude: Optional[float] = None
+    course: Optional[float] = None
+    raw_data: Optional[dict] = None
 
     class Config:
         from_attributes = True

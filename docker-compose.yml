@@ -26,6 +26,13 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/telemetry
+      - TRACCAR_URL=https://demo4.traccar.org
+      - TRACCAR_EMAIL=fabianb@tokioba.com
+      - TRACCAR_PASSWORD=Radius@1290!
+      - TRACCAR_TOKEN=ehbiEoV1hUuCqWIQu0bpWZ:APA91bEoJ55-LLnp_udh3ZXpQXua_GfSup_Ttoh8_Ms_-iQUnOzNpbWgqq4wHFDyPjFYpjlXiksyI704909AB7fCbzOAxnBjH7_ULR9Zw4xo2A_YpATk3dA
+      - TRACCAR_SYNC_INTERVAL=5
+    volumes:
+      - ./backend:/app
     ports:
       - "8000:8000"
 

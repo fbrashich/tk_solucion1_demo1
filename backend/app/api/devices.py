@@ -277,7 +277,9 @@ async def get_all_devices_status(
             last_lat=last_event.latitude if last_event else None,
             last_lon=last_event.longitude if last_event else None,
             engine_hours=engine_hours,
-            last_updated=last_dt
+            last_updated=last_dt,
+            last_speed=dev_state.last_speed if dev_state else (last_event.speed if last_event else None),
+            raw_data=dev_state.last_raw_data if dev_state else (last_event.raw_data if last_event else None)
         ))
 
     return FleetSummaryResponse(
@@ -335,7 +337,9 @@ async def get_device_status(
         last_lat=last_event.latitude if last_event else None,
         last_lon=last_event.longitude if last_event else None,
         engine_hours=round(device_state.engine_hours, 2) if device_state else 0.0,
-        last_updated=last_dt
+        last_updated=last_dt,
+        last_speed=device_state.last_speed if device_state else (last_event.speed if last_event else None),
+        raw_data=device_state.last_raw_data if device_state else (last_event.raw_data if last_event else None)
     )
 
 @router.get("/{device_id}/logs", response_model=List[TelemetryEventResponse])
@@ -410,7 +414,11 @@ async def export_device_telemetry(
                 "timestamp": ev.timestamp.isoformat() if ev.timestamp else None,
                 "latitude": ev.latitude,
                 "longitude": ev.longitude,
-                "ignition_state": ev.ignition_state
+                "ignition_state": ev.ignition_state,
+                "speed": ev.speed,
+                "altitude": ev.altitude,
+                "course": ev.course,
+                "raw_data": ev.raw_data
             }
             for ev in events
         ]
@@ -424,6 +432,7 @@ async def export_device_telemetry(
         "Fecha Hora UTC",
         "Latitud",
         "Longitud",
+        "Velocidad (km/h)",
         "Ignicion",
         "Estado Motor"
     ])
@@ -432,12 +441,14 @@ async def export_device_telemetry(
         utc_str = ev.timestamp.strftime("%Y-%m-%d %H:%M:%S") if ev.timestamp else ""
         ignition_str = "ON" if ev.ignition_state else "OFF"
         motor_str = "OPERANDO" if ev.ignition_state else "DETENIDA"
+        speed_str = f"{ev.speed:.1f}" if ev.speed is not None else "0.0"
         writer.writerow([
             ev.id,
             ev.device_id,
             utc_str,
             f"{ev.latitude:.6f}",
             f"{ev.longitude:.6f}",
+            speed_str,
             ignition_str,
             motor_str
         ])

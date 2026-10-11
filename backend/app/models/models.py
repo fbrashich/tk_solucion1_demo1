@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db import Base
@@ -16,7 +16,7 @@ class User(Base):
 class Device(Base):
     __tablename__ = "devices"
     id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String, unique=True, index=True, nullable=False) # Alias/Código (ej. MESA_01)
+    device_id = Column(String, unique=True, index=True, nullable=False) # Alias/Código (ej. MESA_01, ATC700_01)
     name = Column(String, nullable=False) # Nombre de la máquina
     type = Column(String, default="Mesa Vibratoria", nullable=False)
     description = Column(String, nullable=True)
@@ -28,7 +28,7 @@ class Device(Base):
 
     # Campos de integración con Traccar
     traccar_unique_id = Column(String, nullable=True, index=True) # IMEI / Unique ID en Traccar
-    traccar_model = Column(String, nullable=True) # Modelo GPS (ej. Teltonika FMB920, ESP32)
+    traccar_model = Column(String, nullable=True) # Modelo GPS (ej. Teltonika ATC700, FMB920)
     sim_phone = Column(String, nullable=True) # Número SIM
     category = Column(String, default="machinery", nullable=True) # Categoría Traccar
 
@@ -42,6 +42,12 @@ class TelemetryEvent(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     ignition_state = Column(Boolean, nullable=False)
+    
+    # Nuevos campos de telemetría completa
+    speed = Column(Float, nullable=True)
+    altitude = Column(Float, nullable=True)
+    course = Column(Float, nullable=True)
+    raw_data = Column(JSON, nullable=True) # Almacena todo el JSON devuelto por Traccar
 
 class DeviceState(Base):
     __tablename__ = "device_states"
@@ -51,3 +57,9 @@ class DeviceState(Base):
     last_ignition_state = Column(Boolean, nullable=True)
     last_ignition_on_time = Column(DateTime(timezone=True), nullable=True)
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Nuevos campos consolidados
+    last_latitude = Column(Float, nullable=True)
+    last_longitude = Column(Float, nullable=True)
+    last_speed = Column(Float, nullable=True)
+    last_raw_data = Column(JSON, nullable=True)

@@ -35,6 +35,15 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS traccar_model VARCHAR;"))
                 await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS sim_phone VARCHAR;"))
                 await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS category VARCHAR DEFAULT 'machinery';"))
+                # Telemetría enriquecida y raw_data
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS speed FLOAT;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS altitude FLOAT;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS course FLOAT;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS raw_data JSONB;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_latitude FLOAT;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_longitude FLOAT;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_speed FLOAT;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_raw_data JSONB;"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")
@@ -84,6 +93,7 @@ async def init_db():
 
         # 3. Asegurar dispositivos iniciales de demo para el operador Aldo
         initial_devices = [
+            ("ATC700_01", "Teltonika ATC700", "GPS Industrial", "Unidad Telemática Teltonika ATC700 (Hardware Real)", "860693080022560", "Teltonika ATC700", "", "car"),
             ("MESA_01", "Mesa Vibratoria Principal", "Mesa Vibratoria", "Sector A - Lavado y Separación", "868204030100001", "Teltonika FMB920", "+5491155550001", "machinery"),
             ("MESA_02", "Mesa Clasificadora 02", "Mesa Clasificadora", "Sector B - Concentración Gravimétrica", "868204030100002", "Teltonika FMB920", "+5491155550002", "machinery"),
             ("PALA_01", "Pala Cargadora Frontal", "Maquinaria Pesada", "Área de Acopio y Alimentación", "868204030100003", "Queclink GV300", "+5491155550003", "tractor")

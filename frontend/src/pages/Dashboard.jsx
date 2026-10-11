@@ -15,7 +15,8 @@ import {
   AlertTriangle, WifiOff, Compass, Navigation, 
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
-  Trash2, X, Smartphone, Satellite, Info, HardDrive
+  Trash2, X, Smartphone, Satellite, Info, HardDrive,
+  Battery, Signal, Code
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -98,6 +99,7 @@ export default function Dashboard() {
   const [filterIgnition, setFilterIgnition] = useState('all'); // 'all' | 'on' | 'off'
   const [selectedMapCenter, setSelectedMapCenter] = useState(null);
   const [activeMobileTab, setActiveMobileTab] = useState('overview'); // 'overview' | 'logs'
+  const [selectedRawData, setSelectedRawData] = useState(null);
 
   // Estado para gestión de dispositivos por el Operador
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -107,7 +109,7 @@ export default function Dashboard() {
     type: 'Mesa Vibratoria',
     description: '',
     traccar_unique_id: '',
-    traccar_model: 'Teltonika FMB920',
+    traccar_model: 'Teltonika ATC700',
     sim_phone: '',
     category: 'machinery'
   });
@@ -610,6 +612,96 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Barra de Sensores y Telemetría en Tiempo Real (Teltonika / Traccar) */}
+        {!isFleetView && singleStatus && (
+          <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-lg backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-6 text-xs">
+              {/* Velocidad */}
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                  <Gauge className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Velocidad</span>
+                  <span className="font-mono font-bold text-white text-sm">
+                    {(singleStatus.last_speed ?? singleStatus.raw_data?.speed ?? 0).toFixed(1)} <span className="text-xs text-slate-400 font-normal">km/h</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Batería Interna */}
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <Battery className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Batería GPS</span>
+                  <span className="font-mono font-bold text-emerald-300 text-sm">
+                    {singleStatus.raw_data?.attributes?.battery 
+                      ? `${Number(singleStatus.raw_data.attributes.battery).toFixed(2)} V` 
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Señal Celular (RSSI) */}
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                  <Signal className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Señal GSM</span>
+                  <span className="font-mono font-bold text-purple-300 text-sm">
+                    {singleStatus.raw_data?.attributes?.rssi != null 
+                      ? `${singleStatus.raw_data.attributes.rssi} / 5` 
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Satélites GPS */}
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                  <Satellite className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Satélites</span>
+                  <span className="font-mono font-bold text-amber-300 text-sm">
+                    {singleStatus.raw_data?.attributes?.sat ?? '0 fijados'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Odómetro / Distancia Total */}
+              {singleStatus.raw_data?.attributes?.totalDistance != null && (
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Odómetro</span>
+                    <span className="font-mono font-bold text-blue-300 text-sm">
+                      {(Number(singleStatus.raw_data.attributes.totalDistance) / 1000).toFixed(1)} <span className="text-xs text-slate-400 font-normal">km</span>
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Botón para ver Telemetría Cruda (JSON) */}
+            {singleStatus.raw_data && (
+              <button
+                onClick={() => setSelectedRawData(singleStatus.raw_data)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-slate-700 transition-all cursor-pointer shadow-md active:scale-95 shrink-0"
+                title="Inspeccionar todos los parámetros telemáticos y entradas/salidas (IOs) recibidas de Traccar"
+              >
+                <Code className="w-4 h-4" />
+                <span>Ver Telemetría Cruda (JSON Traccar)</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Tarjetas de Métricas Clave */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
@@ -748,7 +840,11 @@ export default function Dashboard() {
                 </p>
                 <div className="text-sm font-bold text-slate-100 flex items-center gap-1">
                   <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <span>San Juan, Argentina</span>
+                  <span className="truncate max-w-[200px]" title={singleStatus?.raw_data?.address || ''}>
+                    {!isFleetView && singleStatus?.raw_data?.address 
+                      ? singleStatus.raw_data.address 
+                      : (!isFleetView && singleStatus?.last_lat && singleStatus.last_lat < -33 ? 'Buenos Aires, Argentina' : 'San Juan, Argentina')}
+                  </span>
                 </div>
                 <p className="text-xs font-mono text-slate-400 mt-1">
                   {!isFleetView && singleStatus?.last_lat 
@@ -1028,20 +1124,34 @@ export default function Dashboard() {
                             {isOn ? 'ON' : 'OFF'}
                           </span>
                         </div>
-                        <p className="text-[11px] font-mono text-slate-400 mt-0.5 truncate">
-                          Lat {log.latitude?.toFixed(4)}, Lon {log.longitude?.toFixed(4)}
-                        </p>
+                        <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 mt-0.5 truncate">
+                          <span>Lat {log.latitude?.toFixed(4)}, Lon {log.longitude?.toFixed(4)}</span>
+                          {log.speed != null && (
+                            <span className="text-cyan-300">• {log.speed.toFixed(1)} km/h</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => centerOnEvent(log.latitude, log.longitude)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-slate-700 shrink-0 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                      title="Centrar en el mapa"
-                    >
-                      <Compass className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Ubicar</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {log.raw_data && (
+                        <button
+                          onClick={() => setSelectedRawData(log.raw_data)}
+                          className="px-2 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 text-[11px] font-mono font-bold border border-slate-700 transition-all cursor-pointer"
+                          title="Ver telemetría cruda JSON"
+                        >
+                          JSON
+                        </button>
+                      )}
+                      <button
+                        onClick={() => centerOnEvent(log.latitude, log.longitude)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-slate-700 shrink-0 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                        title="Centrar en el mapa"
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Ubicar</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -1232,6 +1342,7 @@ export default function Dashboard() {
                       onChange={(e) => setNewDeviceForm({ ...newDeviceForm, traccar_model: e.target.value })}
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
                     >
+                      <option value="Teltonika ATC700">Teltonika ATC700</option>
                       <option value="Teltonika FMB920">Teltonika FMB920</option>
                       <option value="Queclink GV300">Queclink GV300</option>
                       <option value="Suntech ST310">Suntech ST310</option>
@@ -1297,6 +1408,52 @@ export default function Dashboard() {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* Modal Inspector de Telemetría JSON Cruda (Traccar) */}
+      {selectedRawData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-slate-100 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                  <Code className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Inspector de Telemetría Completa</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      100% Datos Almacenados
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">Todos los parámetros telemáticos y entradas/salidas (IOs) recibidos desde Traccar</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRawData(null)}
+                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto rounded-xl bg-slate-950 p-4 border border-slate-800 font-mono text-xs text-cyan-300">
+              <pre className="whitespace-pre-wrap">{JSON.stringify(selectedRawData, null, 2)}</pre>
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              <span className="text-xs text-slate-400 font-mono">
+                {selectedRawData.protocol ? `Protocolo: ${selectedRawData.protocol}` : 'Traccar Payload'}
+              </span>
+              <button
+                onClick={() => setSelectedRawData(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
