@@ -99,18 +99,22 @@ async def init_db():
             ("PALA_01", "Pala Cargadora Frontal", "Maquinaria Pesada", "Área de Acopio y Alimentación", "868204030100003", "Queclink GV300", "+5491155550003", "tractor")
         ]
 
+        res_fabian = await session.execute(select(User).where(User.username == "fabianb_op"))
+        fabian_user = res_fabian.scalars().first()
+
         for dev_id, name, dev_type, desc, t_id, t_model, sim, cat in initial_devices:
+            owner_user_id = (fabian_user.id if fabian_user and dev_id == "ATC700_01" else aldo_user.id)
             dev_res = await session.execute(select(Device).where(Device.device_id == dev_id))
             dev_obj = dev_res.scalars().first()
             if not dev_obj:
-                logger.info(f"Seeding default device: {dev_id} ({name}) for user {aldo_user.username}")
+                logger.info(f"Seeding default device: {dev_id} ({name}) for user {owner_user_id}")
                 new_dev = Device(
                     device_id=dev_id,
                     name=name,
                     type=dev_type,
                     description=desc,
                     is_active=True,
-                    user_id=aldo_user.id,
+                    user_id=owner_user_id,
                     traccar_unique_id=t_id,
                     traccar_model=t_model,
                     sim_phone=sim,
@@ -118,8 +122,10 @@ async def init_db():
                 )
                 session.add(new_dev)
             else:
-                # Actualizar relación con Aldo y datos Traccar si están vacíos
-                if dev_obj.user_id is None:
+                # Si el usuario es fabianb_op y el dispositivo es ATC700_01, asegurar asignación
+                if dev_id == "ATC700_01" and fabian_user:
+                    dev_obj.user_id = fabian_user.id
+                elif dev_obj.user_id is None:
                     dev_obj.user_id = aldo_user.id
                 if not dev_obj.traccar_unique_id:
                     dev_obj.traccar_unique_id = t_id
