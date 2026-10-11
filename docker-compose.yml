@@ -40,42 +40,15 @@ services:
     ports:
       - "3000:80"
 
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: telemetry_tunnel
+  zrok:
+    image: openziti/zrok2:latest
+    container_name: telemetry_zrok
     restart: always
     depends_on:
       - web
-    command: tunnel --no-autoupdate run --token eyJhIjoiYzExNTgwZTJiMjU2MDg4ZWFiNGI0NzY0ODRhMDNkZmMiLCJ0IjoiYTM4NDMxNzYtODhjNC00MDQzLThmNTctZWNhZWUyODBiMGZiIiwicyI6Ik9UUTNNVGM0TVdNdFpUYzNaUzAwTW1GaUxUbG1aR010Tm1Nek4yVmhORFJsTW1ZMSJ9
-
-  zrok:
-    image: openziti/zrok:latest
-    container_name: telemetry_zrok
-    restart: unless-stopped
-    profiles: ["zrok"]
-    depends_on:
-      - web
-    environment:
-      - ZROK_ENABLE_TOKEN=${ZROK_ENABLE_TOKEN:-}
     volumes:
       - ${USERPROFILE:-$HOME}/.zrok2:/home/ziggy/.zrok2
-      - zrok_data:/home/ziggy/.zrok_data
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "
-      if [ ! -f /home/ziggy/.zrok2/environment.json ] && [ ! -f /home/ziggy/.zrok/environment.json ]; then
-        if [ -n \"$$ZROK_ENABLE_TOKEN\" ]; then
-          echo 'Habilitando entorno Zrok con token...'
-          zrok enable $$ZROK_ENABLE_TOKEN
-        else
-          echo 'Aviso: No se encontro entorno zrok habilitado ni variable ZROK_ENABLE_TOKEN.'
-          sleep infinity
-        fi
-      fi
-      echo 'Iniciando túnel público zrok hacia http://web:80 ...'
-      zrok share public http://web:80 --headless
-      "
+    command: share public http://web:80 -n public:tk-iot-demo --headless
 
 volumes:
   postgres_data:
-  zrok_data:

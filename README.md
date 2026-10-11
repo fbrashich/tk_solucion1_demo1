@@ -59,19 +59,20 @@ El script de inicialización crea automáticamente dos cuentas listas para usar:
 
 ---
 
-## Despliegue con Túnel Inverso Zrok 2 (URL Fija Reservada)
+## Despliegue con Túnel Inverso Zrok 2 en Docker (URL Fija Reservada)
 
-La plataforma cuenta con un nombre reservado permanente en **Zrok 2**:
+La plataforma integra el servicio **Zrok 2** directamente en Docker Compose con un nombre reservado permanente:
 
 * **URL Pública Fija**: [https://tk-iot-demo.shares.zrok.io](https://tk-iot-demo.shares.zrok.io)
-* **Destino Local**: `http://localhost:3000` (Nginx unificado en Docker)
+* **Arranque 100% Automático**: Se inicia junto con toda la plataforma al levantar Docker:
+  ```bash
+  docker compose up -d
+  ```
+  *(El contenedor `telemetry_zrok` monta la configuración de tu entorno y se conecta de forma desatendida).*
 
-### 1. Iniciar el Túnel Zrok
-Puedes ejecutar el túnel en cualquier momento con:
-* **Doble clic en**: `start_zrok.bat`
-* O por consola:
-  ```powershell
-  & "C:\zrok_2.0.8_windows_amd64\zrok2.exe" share public http://localhost:3000 -n public:tk-iot-demo --headless
+* **Ver estado o registros del túnel**:
+  ```bash
+  docker logs telemetry_zrok
   ```
 
 ### 2. Cómo remover la pantalla de advertencia inicial (Página Interstitial de Zrok 2)
