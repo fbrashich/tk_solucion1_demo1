@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { loginCall } from '../services/api';
-import { Lock, User, Radio, ArrowRight, ShieldCheck, KeyRound, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, Radio, ArrowRight, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -12,12 +12,6 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-
-  const handleFillAccount = (user, pass) => {
-    setUsername(user);
-    setPassword(pass);
-    setError('');
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,7 +46,7 @@ export default function Login() {
             <Radio className="w-7 h-7 text-cyan-400 group-hover:scale-110 transition-transform" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">
-            Mesa Vibratoria <span className="text-cyan-400">IoT</span>
+            Plataforma <span className="text-cyan-400">IoT</span>
           </h1>
           <p className="text-xs uppercase tracking-widest text-slate-400 mt-1 font-medium">
             Plataforma de Telemetría Industrial
@@ -64,7 +58,6 @@ export default function Login() {
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800/80">
             <div>
               <h2 className="text-base font-semibold text-slate-100">Iniciar Sesión</h2>
-              <p className="text-xs text-slate-400">Ingrese sus credenciales de operador</p>
             </div>
             <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -93,7 +86,7 @@ export default function Login() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="block w-full pl-10 pr-4 py-2.5 text-sm rounded-xl bg-slate-950/70 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
-                  placeholder="admin"
+                  placeholder="Usuario"
                   required
                 />
               </div>
@@ -118,7 +111,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -140,59 +133,12 @@ export default function Login() {
               )}
             </button>
           </form>
-
-          {/* Botones de auto-rellenado para pruebas rápidas */}
-          <div className="mt-6 pt-5 border-t border-slate-800/80 space-y-2">
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-              Acceso Rápido / Cuentas Disponibles:
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleFillAccount('admin', 'admin123')}
-                className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-purple-950/40 border border-purple-800/40 text-[11px] text-purple-300 hover:bg-purple-900/40 transition-all cursor-pointer text-left"
-                title="Super Admin - Gestiona usuarios"
-              >
-                <div>
-                  <span className="font-bold block">admin</span>
-                  <span className="text-[9px] text-purple-400 font-mono">admin123</span>
-                </div>
-                <span className="text-[9px] bg-purple-500/20 px-1.5 py-0.5 rounded text-purple-300">Admin</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleFillAccount('aldo', 'aldo123')}
-                className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-[11px] text-cyan-300 hover:bg-cyan-900/40 transition-all cursor-pointer text-left"
-                title="Operador Aldo - Dispositivos de planta"
-              >
-                <div>
-                  <span className="font-bold block">aldo</span>
-                  <span className="text-[9px] text-cyan-400 font-mono">aldo123</span>
-                </div>
-                <span className="text-[9px] bg-cyan-500/20 px-1.5 py-0.5 rounded text-cyan-300">Operador</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleFillAccount('demo1', 'demo123')}
-                className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-[11px] text-emerald-300 hover:bg-emerald-900/40 transition-all cursor-pointer text-left"
-                title="Operador Demo1 - Flota independiente"
-              >
-                <div>
-                  <span className="font-bold block">demo1</span>
-                  <span className="text-[9px] text-emerald-400 font-mono">demo123</span>
-                </div>
-                <span className="text-[9px] bg-emerald-500/20 px-1.5 py-0.5 rounded text-emerald-300">Operador</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
         <div className="text-center mt-6 flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
           <ShieldCheck className="w-4 h-4 text-emerald-500/70" />
-          <span>Acceso Restringido • Protocolo Seguro JWT</span>
+          <span>Acceso Restringido</span>
         </div>
       </div>
     </div>

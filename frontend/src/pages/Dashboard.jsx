@@ -6,6 +6,7 @@ import {
   getDevices,
   exportDeviceLogs,
   createDevice,
+  updateDevice,
   deleteDevice
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +17,7 @@ import {
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
   Trash2, X, Smartphone, Satellite, Info, HardDrive,
-  Battery, Signal, Code
+  Battery, Signal, Code, Pencil, Settings
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -101,8 +102,13 @@ export default function Dashboard() {
   const [activeMobileTab, setActiveMobileTab] = useState('overview'); // 'overview' | 'logs'
   const [selectedRawData, setSelectedRawData] = useState(null);
 
-  // Estado para gestión de dispositivos por el Operador
+  // Estado para gestión de dispositivos por el Operador (CRUD Completo)
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+  const [showManageDevicesModal, setShowManageDevicesModal] = useState(false);
+  const [showEditDeviceModal, setShowEditDeviceModal] = useState(false);
+  const [isAddingDevice, setIsAddingDevice] = useState(false);
+  const [isUpdatingDevice, setIsUpdatingDevice] = useState(false);
+
   const [newDeviceForm, setNewDeviceForm] = useState({
     device_id: '',
     name: '',
@@ -113,7 +119,18 @@ export default function Dashboard() {
     sim_phone: '',
     category: 'machinery'
   });
-  const [isAddingDevice, setIsAddingDevice] = useState(false);
+
+  const [editDeviceForm, setEditDeviceForm] = useState({
+    device_id: '',
+    name: '',
+    type: 'Mesa Vibratoria',
+    description: '',
+    traccar_unique_id: '',
+    traccar_model: 'Teltonika ATC700',
+    sim_phone: '',
+    category: 'machinery',
+    is_active: true
+  });
   const [toastNotification, setToastNotification] = useState(null);
 
   const showToast = (message, type = 'success') => {
@@ -243,21 +260,71 @@ export default function Dashboard() {
     }
   };
 
-  // Baja / Eliminación del dispositivo seleccionado
-  const handleDeleteCurrentDevice = async () => {
-    if (selectedDeviceId === 'all') return;
-    const targetObj = deviceList.find(d => d.device_id === selectedDeviceId);
-    const targetName = targetObj ? targetObj.name : selectedDeviceId;
+  // Apertura del modal de edición con los datos actuales
+  const handleOpenEditModal = (dev) => {
+    if (!dev) return;
+    setEditDeviceForm({
+      device_id: dev.device_id,
+      name: dev.name || '',
+      type: dev.type || 'Mesa Vibratoria',
+      description: dev.description || '',
+      traccar_unique_id: dev.traccar_unique_id || '',
+      traccar_model: dev.traccar_model || 'Teltonika ATC700',
+      sim_phone: dev.sim_phone || '',
+      category: dev.category || 'machinery',
+      is_active: dev.is_active ?? true
+    });
+    setShowEditDeviceModal(true);
+  };
 
-    if (!window.confirm(`¿Estás seguro de que deseas dar de baja y eliminar el equipo '${selectedDeviceId}' (${targetName})? Se eliminarán también sus registros de telemetría.`)) {
+  // Modificación de dispositivo (CRUD Update)
+  const handleUpdateDevice = async (e) => {
+    e.preventDefault();
+    if (!editDeviceForm.name.trim()) {
+      showToast('Por favor completa el nombre del equipo', 'error');
+      return;
+    }
+
+    setIsUpdatingDevice(true);
+    try {
+      const updated = await updateDevice(editDeviceForm.device_id, {
+        name: editDeviceForm.name.trim(),
+        type: editDeviceForm.type.trim() || 'Mesa Vibratoria',
+        description: editDeviceForm.description.trim() || null,
+        is_active: editDeviceForm.is_active,
+        traccar_unique_id: editDeviceForm.traccar_unique_id.trim() || null,
+        traccar_model: editDeviceForm.traccar_model.trim() || null,
+        sim_phone: editDeviceForm.sim_phone.trim() || null,
+        category: editDeviceForm.category.trim() || 'machinery'
+      });
+      showToast(`Equipo '${updated.device_id}' actualizado exitosamente.`);
+      setShowEditDeviceModal(false);
+      await fetchAllData(true);
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || 'Error al actualizar el dispositivo';
+      showToast(errMsg, 'error');
+    } finally {
+      setIsUpdatingDevice(false);
+    }
+  };
+
+  // Baja / Eliminación de un dispositivo (CRUD Delete)
+  const handleDeleteDevice = async (devId) => {
+    if (!devId || devId === 'all') return;
+    const targetObj = deviceList.find(d => d.device_id === devId);
+    const targetName = targetObj ? targetObj.name : devId;
+
+    if (!window.confirm(`¿Estás seguro de que deseas dar de baja y eliminar el equipo '${devId}' (${targetName})? Se eliminarán también sus registros de telemetría.`)) {
       return;
     }
 
     try {
-      await deleteDevice(selectedDeviceId);
-      showToast(`Equipo '${selectedDeviceId}' eliminado correctamente.`);
-      setSelectedDeviceId('all');
-      setSelectedMapCenter(null);
+      await deleteDevice(devId);
+      showToast(`Equipo '${devId}' eliminado correctamente.`);
+      if (selectedDeviceId === devId) {
+        setSelectedDeviceId('all');
+        setSelectedMapCenter(null);
+      }
       await fetchAllData(true);
     } catch (err) {
       const errMsg = err.response?.data?.detail || 'Error al eliminar el dispositivo';
@@ -389,27 +456,15 @@ export default function Dashboard() {
                   <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
 
-                {/* Botón "+ Agregar Equipo" para el Operador */}
+                {/* Botón "Gestionar Equipos" (Panel CRUD Flota) */}
                 <button
-                  onClick={() => setShowAddDeviceModal(true)}
-                  className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-md shadow-cyan-950/30"
-                  title="Dar de alta una nueva máquina o rastreador Traccar"
+                  onClick={() => setShowManageDevicesModal(true)}
+                  className="flex items-center gap-1.5 h-8 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 text-xs font-bold transition-all cursor-pointer shadow-sm"
+                  title="Administrar y editar los equipos de la flota"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Agregar Equipo</span>
+                  <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Gestionar</span>
                 </button>
-
-                {/* Botón "Eliminar Equipo" si hay un equipo individual seleccionado */}
-                {!isFleetView && (
-                  <button
-                    onClick={handleDeleteCurrentDevice}
-                    className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 border border-rose-500/30 text-rose-300 text-xs font-bold transition-all cursor-pointer"
-                    title={`Eliminar ${selectedDeviceId} de la plataforma`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Eliminar</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -547,13 +602,15 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <button
-              onClick={() => setShowAddDeviceModal(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white text-xs font-bold transition-all cursor-pointer shadow-md shadow-cyan-950/30 shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Agregar Nuevo Dispositivo</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowManageDevicesModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 text-xs font-bold transition-all cursor-pointer shadow-md shrink-0"
+              >
+                <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Gestionar Equipos</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
@@ -598,15 +655,7 @@ export default function Dashboard() {
                 onClick={() => setSelectedDeviceId('all')}
                 className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 transition-colors cursor-pointer"
               >
-                Ver Toda la Flota
-              </button>
-              <button
-                onClick={handleDeleteCurrentDevice}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-bold transition-colors cursor-pointer"
-                title="Eliminar este dispositivo de la plataforma"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Eliminar Dispositivo</span>
+                Ver Flota
               </button>
             </div>
           </div>
@@ -1199,7 +1248,12 @@ export default function Dashboard() {
 
       {/* Modal de Alta de Dispositivo con Integración Traccar */}
       {showAddDeviceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddDeviceModal(false);
+          }}
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
           <div className="w-full max-w-xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-slate-100 space-y-5 max-h-[90vh] overflow-y-auto">
             
             {/* Header del Modal */}
@@ -1412,9 +1466,352 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Modal de Edición de Dispositivo (CRUD Update) */}
+      {showEditDeviceModal && (
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowEditDeviceModal(false);
+          }}
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-slate-100 space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Header del Modal */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Modificar Dispositivo</span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      {editDeviceForm.device_id}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">Actualiza los parámetros operativos y de rastreo GPS</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEditDeviceModal(false)}
+                className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateDevice} className="space-y-4">
+              {/* Sección 1: Datos Operativos */}
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>1. Identificación de la Máquina</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Código / Alias (Fijo)
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={editDeviceForm.device_id}
+                      className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-400 uppercase font-mono cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Nombre de la Máquina <span className="text-cyan-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editDeviceForm.name}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, name: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Tipo de Maquinaria
+                    </label>
+                    <select
+                      value={editDeviceForm.type}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, type: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value="Mesa Vibratoria">Mesa Vibratoria</option>
+                      <option value="Mesa Clasificadora">Mesa Clasificadora</option>
+                      <option value="GPS Industrial">GPS Industrial</option>
+                      <option value="Pala Cargadora Frontal">Pala Cargadora Frontal</option>
+                      <option value="Planta de Lavado">Planta de Lavado</option>
+                      <option value="Generador Diésel">Generador Diésel</option>
+                      <option value="Camión Tolva">Camión Tolva</option>
+                      <option value="Maquinaria Pesada">Maquinaria Pesada</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Ubicación / Sector
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. Sector C - Molienda"
+                      value={editDeviceForm.description}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, description: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 2: Integración TRACCAR */}
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+                  <Satellite className="w-3.5 h-3.5" />
+                  <span>2. Configuración GPS / TRACCAR</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      IMEI / Unique ID de Traccar
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. 860693080022560"
+                      value={editDeviceForm.traccar_unique_id}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, traccar_unique_id: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Modelo del Equipo GPS
+                    </label>
+                    <select
+                      value={editDeviceForm.traccar_model}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, traccar_model: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value="Teltonika ATC700">Teltonika ATC700</option>
+                      <option value="Teltonika FMB920">Teltonika FMB920</option>
+                      <option value="Queclink GV300">Queclink GV300</option>
+                      <option value="Suntech ST310">Suntech ST310</option>
+                      <option value="Concox / Jimi">Concox / Jimi VL03</option>
+                      <option value="Coban GPS103">Coban GPS103</option>
+                      <option value="ESP32 Custom">ESP32 Custom / Telemetría</option>
+                      <option value="OsmAnd Protocol">OsmAnd (App Móvil / GPS)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      N° Chip SIM (Teléfono)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ej. +5491155550004"
+                      value={editDeviceForm.sim_phone}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, sim_phone: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Categoría / Icono
+                    </label>
+                    <select
+                      value={editDeviceForm.category}
+                      onChange={(e) => setEditDeviceForm({ ...editDeviceForm, category: e.target.value })}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    >
+                      <option value="machinery">Maquinaria de Planta (machinery)</option>
+                      <option value="car">Vehículo Liviano (car)</option>
+                      <option value="tractor">Pala / Tractor (tractor)</option>
+                      <option value="truck">Camión Pesado (truck)</option>
+                      <option value="van">Utilitario / Camioneta (van)</option>
+                      <option value="default">General (default)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de Acción */}
+              <div className="pt-2 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEditDeviceModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingDevice}
+                  className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-xs font-bold text-white shadow-lg shadow-cyan-950/40 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>{isUpdatingDevice ? 'Guardando...' : 'Guardar Cambios'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Gestión Integral de Dispositivos (CRUD Flota) */}
+      {showManageDevicesModal && (
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowManageDevicesModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
+          <div className="w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-slate-100 space-y-5 max-h-[90vh] flex flex-col">
+            {/* Header del Modal */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Administración de Dispositivos
+                  </h3>
+                  <div className="mt-1">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      {deviceList.length} Equipos
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowManageDevicesModal(false);
+                    setShowAddDeviceModal(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all cursor-pointer shadow-md"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Nuevo Dispositivo</span>
+                </button>
+                <button
+                  onClick={() => setShowManageDevicesModal(false)}
+                  className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Tabla de Equipos */}
+            <div className="flex-1 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/60">
+              {deviceList.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  No tienes dispositivos registrados en tu cuenta.
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900 border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3">Código</th>
+                      <th className="px-4 py-3">Nombre & Tipo</th>
+                      <th className="px-4 py-3">Rastreador GPS / IMEI</th>
+                      <th className="px-4 py-3">Ubicación / SIM</th>
+                      <th className="px-4 py-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80 font-medium">
+                    {deviceList.map((dev) => (
+                      <tr key={dev.device_id} className="hover:bg-slate-800/40 transition-colors">
+                        <td className="px-4 py-3 font-mono font-bold text-white">
+                          <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+                            {dev.device_id}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-white">{dev.name}</div>
+                          <div className="text-[11px] text-slate-400">{dev.type || 'Maquinaria'}</div>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-[11px]">
+                          <div className="text-cyan-300">{dev.traccar_model || 'GPS'}</div>
+                          <div className="text-slate-400">IMEI: {dev.traccar_unique_id || 'Sin vincular'}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[11px]">
+                          <div className="text-slate-300">{dev.description || 'Sin sector'}</div>
+                          <div className="text-slate-500 font-mono">{dev.sim_phone || 'Sin SIM'}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedDeviceId(dev.device_id);
+                                setSelectedMapCenter(null);
+                                setShowManageDevicesModal(false);
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-cyan-300 transition-colors cursor-pointer"
+                              title="Ver en el mapa"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleOpenEditModal(dev);
+                              }}
+                              className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 transition-colors cursor-pointer"
+                              title="Modificar datos"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDevice(dev.device_id)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 transition-colors cursor-pointer"
+                              title="Eliminar dispositivo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Footer del Modal */}
+            <div className="flex items-center justify-end pt-2 border-t border-slate-800 text-xs text-slate-400">
+              <button
+                onClick={() => setShowManageDevicesModal(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white transition-colors cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Inspector de Telemetría JSON Cruda (Traccar) */}
       {selectedRawData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedRawData(null);
+          }}
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+        >
           <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-6 text-slate-100 space-y-4 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-3">
