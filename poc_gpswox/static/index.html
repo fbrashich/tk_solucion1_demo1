@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoC GPSWOX • Integración Directa de Telemetría</title>
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+  <!-- 1. Header Superior -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-icon">📡</div>
+      <div class="brand-info">
+        <h1>
+          <span>PoC GPSWOX Telemetría</span>
+          <span class="badge badge-poc">Opción A • API Directa</span>
+        </h1>
+        <p>Nodo de prueba conectado a <strong>demo-hs.gpswox.com</strong></p>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <span id="sync-indicator" style="font-size: 11px; font-weight: 600; font-family: monospace; color: #34d399; margin-right: 8px;">
+        En vivo
+      </span>
+      <button id="btn-refresh" class="btn" title="Refrescar datos de telemetría">
+        🔄 Refrescar
+      </button>
+      <button id="btn-raw-json" class="btn btn-primary" title="Inspeccionar el 100% de los datos que envía GPSWOX">
+        { } Ver Payload Crudo
+      </button>
+    </div>
+  </header>
+
+  <!-- 2. Contenedor Principal -->
+  <main class="main-container">
+
+    <!-- Banner del Dispositivo ACT001 -->
+    <div class="device-banner">
+      <div class="device-main">
+        <div class="device-radar-icon">
+          🛰️
+        </div>
+        <div>
+          <div class="device-title">
+            <h2 id="dev-name">ACT001</h2>
+            <span class="badge badge-online" id="dev-online-badge">ONLINE (ACK)</span>
+            <span class="badge" style="background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3);">
+              Protocolo Teltonika
+            </span>
+          </div>
+          <div class="device-meta">
+            <span><strong>IMEI:</strong> <span id="dev-imei">860693080022560</span></span>
+            <span>• <strong>Modelo:</strong> <span id="dev-model">Teltonika ATC700</span></span>
+            <span>• <strong>Último Reporte:</strong> <span id="dev-time">-</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; color: #94a3b8; text-align: right;">
+        <div>Servidor origen: <strong>demo-hs.gpswox.com</strong></div>
+        <div style="font-size: 11px; color: #64748b;">Conexión directa vía user_api_hash</div>
+      </div>
+    </div>
+
+    <!-- Grilla de KPIs de Telemetría en Tiempo Real -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon speed">⚡</div>
+        <div class="kpi-data">
+          <span class="kpi-label">Velocidad</span>
+          <span class="kpi-value" id="kpi-speed">0.0 km/h</span>
+          <span class="kpi-sub">Sensor GPS</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon battery">🔋</div>
+        <div class="kpi-data">
+          <span class="kpi-label">Batería Interna</span>
+          <span class="kpi-value" id="kpi-battery">3.59 V (45%)</span>
+          <span class="kpi-sub">IO 113 / Teltonika</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon odometer">🛣️</div>
+        <div class="kpi-data">
+          <span class="kpi-label">Odómetro Total</span>
+          <span class="kpi-value" id="kpi-odometer">80.27 km</span>
+          <span class="kpi-sub">Distancia acumulada</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon engine">⏱️</div>
+        <div class="kpi-data">
+          <span class="kpi-label">Horómetro de Motor</span>
+          <span class="kpi-value" id="kpi-engine">9.9 hs</span>
+          <span class="kpi-sub">Tiempo de encendido</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-icon driver">👤</div>
+        <div class="kpi-data">
+          <span class="kpi-label">Conductor Asignado</span>
+          <span class="kpi-value" id="kpi-driver" style="font-size: 14px;">Fabian Bruno</span>
+          <span class="kpi-sub">+54 9 11 5471-3846</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mapa e Historial -->
+    <div class="content-grid">
+      
+      <!-- Panel de Mapa -->
+      <div class="map-card">
+        <div class="card-header">
+          <h3>
+            <span>📍 Localización y Trayectoria en Vivo</span>
+          </h3>
+          <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">
+            OpenStreetMap Dark • Coordenadas WGS84
+          </span>
+        </div>
+        <div id="map"></div>
+      </div>
+
+      <!-- Panel de Historial y Eventos -->
+      <div class="history-card">
+        <div class="card-header">
+          <h3>
+            <span>📜 Historial Telemático de GPSWOX</span>
+          </h3>
+          <span class="badge" id="hist-points-count" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">
+            0 puntos
+          </span>
+        </div>
+
+        <!-- Filtros de Fecha y Tipo de Medición -->
+        <div class="history-filter-bar">
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Período:</span>
+              <button class="filter-btn active" data-range="today">Hoy</button>
+              <button class="filter-btn" data-range="yesterday">Ayer</button>
+              <button class="filter-btn" data-range="3days">Últimos 3 días</button>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 8px; width: 100%;">
+            <button class="type-filter-btn active" data-type="moving" style="flex: 1.2;">
+              ⚡ En Movimiento <span id="badge-moving-count" style="font-size: 10px; opacity: 0.85;">(0)</span>
+            </button>
+            <button class="type-filter-btn" data-type="top" style="flex: 1;">
+              🏆 Picos Vel.
+            </button>
+            <button class="type-filter-btn" data-type="all" style="flex: 1;">
+              🌐 Todos <span id="badge-all-count" style="font-size: 10px; opacity: 0.85;">(0)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Resumen de Métricas de Viaje -->
+        <div style="padding: 10px 16px; background: rgba(30, 41, 59, 0.4); border-bottom: 1px solid rgba(51, 65, 85, 0.5); display: flex; justify-content: space-between; font-size: 11px;">
+          <div>Distancia en rango: <strong id="hist-distance" style="color: #38bdf8;">0 km</strong></div>
+          <div>Velocidad máxima: <strong id="hist-top-speed" style="color: #f59e0b;">0 km/h</strong></div>
+        </div>
+
+        <!-- Lista de Puntos / Eventos -->
+        <div class="history-list" id="history-events-list">
+          <!-- Generado dinámicamente -->
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Modal Raw JSON Inspector -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🔍 Payload Completo Recibido desde GPSWOX API</h3>
+        <button id="btn-close-modal" class="btn" style="padding: 4px 8px; font-size: 14px;">✕</button>
+      </div>
+      <div class="modal-body">
+        <pre id="raw-json-code">Cargando...</pre>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeRawJsonModal()" class="btn btn-primary">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div>
+      PoC Opción A: Prueba de Concepto de Ingesta Directa GPSWOX • Dispositivo <strong>ACT001 (IMEI 860693080022560)</strong>
+    </div>
+    <div style="font-family: monospace;">
+      Servidor Local: Puerto 8050 • API Hash Activo
+    </div>
+  </footer>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- App JS -->
+  <script src="/app.js"></script>
+</body>
+</html>
