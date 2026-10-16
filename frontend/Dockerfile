@@ -3,11 +3,14 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
+# Limitar la memoria heap de Node a 512 MB para optimizar compilación en hardware con 1 GB RAM
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Copiar archivos de configuración de dependencias
 COPY package*.json ./
 
-# Instalar dependencias
-RUN npm install
+# Instalar dependencias sin auditoría ni telemetría pesada
+RUN npm install --no-audit --no-fund
 
 # Copiar el resto del código y realizar el build
 COPY . .

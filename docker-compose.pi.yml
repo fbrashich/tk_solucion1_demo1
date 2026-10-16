@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  # Base de Datos PostgreSQL (optimizada para bajo consumo y en SSD)
+  db:
+    image: postgres:15-alpine
+    container_name: telemetry_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: telemetry
+    volumes:
+      - /mnt/ssd/tokioba-iot/data/postgres:/var/lib/postgresql/data
+    command: >
+      postgres 
+      -c shared_buffers=24MB 
+      -c work_mem=4MB 
+      -c maintenance_work_mem=16MB 
+      -c max_connections=20
+      -c checkpoint_completion_target=0.7
+    deploy:
+      resources:
+        limits:
+          memory: 100M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backend FastAPI Tokioba
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: telemetry_api
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/telemetry
+      - SECRET_KEY=tokioba_super_secret_pi_key_2026
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      - TRACCAR_URL=https://demo4.traccar.org
+      - TRACCAR_EMAIL=fabianb@tokioba.com
+      - TRACCAR_PASSWORD=Radius@1290!
+      - TRACCAR_TOKEN=ehbiEoV1hUuCqWIQu0bpWZ:APA91bEoJ55-LLnp_udh3ZXpQXua_GfSup_Ttoh8_Ms_-iQUnOzNpbWgqq4wHFDyPjFYpjlXiksyI704909AB7fCbzOAxnBjH7_ULR9Zw4xo2A_YpATk3dA
+      - TRACCAR_SYNC_INTERVAL=5
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    deploy:
+      resources:
+        limits:
+          memory: 120M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Servidor Web Nginx (Compila frontend automáticamente dentro de Docker)
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: telemetry_web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
