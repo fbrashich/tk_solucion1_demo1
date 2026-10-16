@@ -38,11 +38,11 @@ Esta guía detalla la implementación completa para la plataforma telemática **
 │ • Cero escrituras de desgaste     │ • Auto-Deploy: Script deploy.sh    │
 └───────────────────────────────────┴────────────────────────────────────┘
                                     │
-                                    │ 3. Expuesto a Internet vía Playit.gg
+                                    │ 3. Expuesto a Internet
                                     ▼
        ┌────────────────────────────┴───────────────────────────┐
-       │ • Dashboard Web: https://tokioba-demo.playit.gg        │
-       │ • GPS Teltonika: teltonika-tokioba.playit.gg:34521     │
+       │ • Dashboard Web (HTTP): ZROK (public:tk-iot-demo)      │
+       │ • GPS Teltonika (TCP): practically-doing.tun.ply.gg:.. │
        └────────────────────────────────────────────────────────┘
 ```
 
@@ -347,6 +347,26 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
+
+  # Túnel Público Seguro para el Dashboard Web (ZROK)
+  zrok:
+    image: openziti/zrok2:latest
+    container_name: telemetry_zrok
+    restart: unless-stopped
+    depends_on:
+      - web
+    volumes:
+      - ${HOME}/.zrok2:/home/ziggy/.zrok2
+    command: share public http://web:80 -n public:tk-iot-demo --headless
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 ```
 
 ---
@@ -509,27 +529,97 @@ Ahora tu flujo de trabajo como desarrollador es 100% libre:
 
 ---
 
-## 13. PASO 11: Exposición Externa Gratuita con Playit.gg (Túnel Teltonika TCP + Web)
+## 13. PASO 11: Exposición Externa Híbrida: Teltonika GPS (TCP Playit) + Web Dashboard (HTTP ZROK)
 
-Para que los equipos GPS en campo envíen telemetría y puedas acceder al Dashboard desde cualquier lugar del mundo:
+Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/oficina, implementamos una solución híbrida especializada:
+1. **Tráfico TCP (Rastreadores GPS Teltonika):** Vía **Playit.gg**, que soporta conexiones brutas de Capa 4 requeridas por el firmware de los dispositivos.
+2. **Tráfico HTTP (Dashboard Web):** Vía **ZROK**, recuperando exactamente la misma configuración y dominio persistente que ya funcionaba en el Docker de la PC.
 
-```bash
-# 1. Instalar Playit.gg
-curl -SsL https://playit-cloud.github.io/ppa/key.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/playit.gpg >/dev/null
-echo "deb [signed-by=/etc/apt/trusted.gpg.d/playit.gpg] https://playit-cloud.github.io/ppa/data ./" | sudo tee /etc/apt/sources.list.d/playit.list
-sudo apt update
-sudo apt install -y playit
+---
 
-# 2. Iniciar y vincular
-playit
-```
-* Abre el enlace en tu navegador y configura:
-  * **Túnel Web (HTTP):** Puerto local `3000` $\rightarrow$ Te da URL SSL pública (ej. `https://tokioba-demo.playit.gg`).
-  * **Túnel GPS Teltonika (TCP Raw):** Puerto local `5027` $\rightarrow$ Te da un **Host y Puerto estático público fijo** (ej. `teltonika-tokioba.playit.gg:34521`).
-* Habilitar servicio en segundo plano:
-  ```bash
-  sudo systemctl enable --now playit
+### 13.1 Solución TCP para Rastreadores GPS Teltonika (Playit.gg)
+
+Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos asignados:
+
+* **Túnel:** `iot-tokioba`
+* **Dominio asignado:** `practically-doing.tun.ply.gg`
+* **Local IP:** `127.0.0.1`
+* **Local Port:** `5027`
+* **Proxy Protocol:** `None`
+
+#### Pasos en la Raspberry Pi:
+1. **Instalar Playit.gg:**
+   ```bash
+   curl -SsL https://playit-cloud.github.io/ppa/key.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/playit.gpg >/dev/null
+   echo "deb [signed-by=/etc/apt/trusted.gpg.d/playit.gpg] https://playit-cloud.github.io/ppa/data ./" | sudo tee /etc/apt/sources.list.d/playit.list
+   sudo apt update
+   sudo apt install -y playit
+   ```
+
+2. **Iniciar Playit y confirmar vinculación:**
+   ```bash
+   playit
+   ```
+   * Sigue el enlace que aparece en la terminal para confirmar la sesión con tu cuenta.
+   * En el panel web de Playit, confirma que el túnel **`iot-tokioba`** esté activo con:
+     * **Host:** `practically-doing.tun.ply.gg`
+     * **Local address:** `127.0.0.1:5027`
+     * **Proxy Protocol:** `None`
+
+3. **Habilitar Playit como servicio del sistema en segundo plano:**
+   ```bash
+   sudo systemctl enable --now playit
+   ```
+
+4. **Configuración en los Rastreadores Teltonika (Teltonika Configurator / SMS):**
+   * **Target Server Domain:** `practically-doing.tun.ply.gg`
+   * **Target Server Port:** *(El puerto público exterior asignado por Playit en tu panel, ej. 34521)*
+   * **Protocol:** `TCP`
+
+---
+
+### 13.2 Solución HTTP para el Web Dashboard (ZROK en Docker)
+
+Recuperamos la configuración de **ZROK** probada en la PC (`openziti/zrok2:latest`), logrando una URL pública con SSL automático y reservada bajo el alias `public:tk-iot-demo`.
+
+#### 1. Transferir las credenciales de ZROK desde tu PC a la Raspberry Pi:
+Para que la Raspberry Pi no tenga que registrar una cuenta nueva ni pierda el nombre reservado, copiamos la identidad existente de tu PC:
+
+* **Desde tu PC con Windows (abrir PowerShell):**
+  ```powershell
+  # Copiar la carpeta .zrok2 de tu usuario de Windows al home de la Raspberry Pi:
+  scp -r $env:USERPROFILE\.zrok2 iot_admin_srv@SRVIOT01.local:~/.zrok2
   ```
+
+#### 2. Verificar el servicio ZROK en `docker-compose.pi.yml`:
+El servicio ya está añadido al Compose y mapea automáticamente tu identidad desde `${HOME}/.zrok2`:
+```yaml
+  zrok:
+    image: openziti/zrok2:latest
+    container_name: telemetry_zrok
+    restart: unless-stopped
+    depends_on:
+      - web
+    volumes:
+      - ${HOME}/.zrok2:/home/ziggy/.zrok2
+    command: share public http://web:80 -n public:tk-iot-demo --headless
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+```
+
+#### 3. Levantar el túnel ZROK en la Raspberry Pi:
+```bash
+cd /mnt/ssd/tokioba-iot
+docker compose -f docker-compose.pi.yml up -d zrok
+```
+
+#### 4. Validar el enlace en vivo:
+```bash
+docker logs -f telemetry_zrok
+```
+*Verás la confirmación de la sesión compartida con tu URL pública activa (ej. `https://tk-iot-demo.share.zrok.io`), lista para ser accedida desde cualquier navegador o teléfono móvil sin restricciones de red.*
 
 ---
 

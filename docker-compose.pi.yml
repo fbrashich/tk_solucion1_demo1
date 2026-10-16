@@ -80,3 +80,23 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
+
+  # Túnel Público Seguro para el Dashboard Web (ZROK)
+  zrok:
+    image: openziti/zrok2:latest
+    container_name: telemetry_zrok
+    restart: unless-stopped
+    depends_on:
+      - web
+    volumes:
+      - ${HOME}/.zrok2:/home/ziggy/.zrok2
+    command: share public http://web:80 -n public:tk-iot-demo --headless
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
