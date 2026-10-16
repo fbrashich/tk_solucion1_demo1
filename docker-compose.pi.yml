@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Base de Datos PostgreSQL (optimizada para bajo consumo y en SSD)
   db:

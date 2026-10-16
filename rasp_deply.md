@@ -265,8 +265,6 @@ cd /mnt/ssd/tokioba-iot
 Verificamos que el archivo `docker-compose.pi.yml` esté presente dentro de `/mnt/ssd/tokioba-iot/`. Si necesitas crearlo o ajustarlo, esta es la configuración definitiva optimizada para compilación autónoma y bajo consumo de RAM:
 
 ```yaml
-version: '3.8'
-
 services:
   # Base de Datos PostgreSQL (en SSD)
   db:
