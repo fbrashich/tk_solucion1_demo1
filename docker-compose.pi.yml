@@ -88,7 +88,7 @@ services:
       - web
     volumes:
       - ${HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:tk-iot-demo --headless
+    command: share public http://web:80 -n public:iot-web-portal --headless
     deploy:
       resources:
         limits:

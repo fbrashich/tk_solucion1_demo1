@@ -41,7 +41,7 @@ Esta guía detalla la implementación completa para la plataforma telemática **
                                     │ 3. Expuesto a Internet
                                     ▼
        ┌────────────────────────────┴───────────────────────────┐
-       │ • Dashboard Web (HTTP): ZROK (public:tk-iot-demo)      │
+       │ • Dashboard Web (HTTP): ZROK (public:iot-web-portal)   │
        │ • GPS Teltonika (TCP): practically-doing.tun.ply.gg:.. │
        └────────────────────────────────────────────────────────┘
 ```
@@ -355,7 +355,7 @@ services:
       - web
     volumes:
       - ${HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:tk-iot-demo --headless
+    command: share public http://web:80 -n public:iot-web-portal --headless
     deploy:
       resources:
         limits:
@@ -578,7 +578,7 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos 
 
 ### 13.2 Solución HTTP para el Web Dashboard (ZROK en Docker)
 
-Recuperamos la configuración de **ZROK** probada en la PC (`openziti/zrok2:latest`), logrando una URL pública con SSL automático y reservada bajo el alias `public:tk-iot-demo`.
+Recuperamos la configuración de **ZROK** probada en la PC (`openziti/zrok2:latest`), logrando una URL pública con SSL automático y reservada bajo el alias `public:iot-web-portal`.
 
 #### 1. Transferir las credenciales de ZROK desde tu PC a la Raspberry Pi:
 Para que la Raspberry Pi no tenga que registrar una cuenta nueva ni pierda el nombre reservado, copiamos la identidad existente de tu PC:
@@ -600,7 +600,7 @@ El servicio ya está añadido al Compose y mapea automáticamente tu identidad d
       - web
     volumes:
       - ${HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:tk-iot-demo --headless
+    command: share public http://web:80 -n public:iot-web-portal --headless
     deploy:
       resources:
         limits:
@@ -617,7 +617,7 @@ docker compose -f docker-compose.pi.yml up -d zrok
 ```bash
 docker logs -f telemetry_zrok
 ```
-*Verás la confirmación de la sesión compartida con tu URL pública activa (ej. `https://tk-iot-demo.share.zrok.io`), lista para ser accedida desde cualquier navegador o teléfono móvil sin restricciones de red.*
+*Verás la confirmación de la sesión compartida con tu URL pública activa (ej. `https://iot-web-portal.shares.zrok.io`), lista para ser accedida desde cualquier navegador o teléfono móvil sin restricciones de red.*
 
 ---
 
