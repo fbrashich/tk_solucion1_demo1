@@ -15,8 +15,10 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     # 1. Traer los cambios limpios
     git reset --hard origin/main
     
-    # 2. Reconstruir y actualizar contenedores Docker
-    docker compose -f docker-compose.pi.yml up -d --build
+    # 2. Reconstruir secuencialmente (api primero, luego web) para proteger la RAM
+    docker compose -f docker-compose.pi.yml build api
+    docker compose -f docker-compose.pi.yml build web
+    docker compose -f docker-compose.pi.yml up -d
     
     # 3. Limpiar imágenes viejas de Docker para no acumular espacio
     docker image prune -f >/dev/null 2>&1

@@ -353,15 +353,23 @@ services:
 
 ## 10. PASO 8: Primer Despliegue de la Plataforma
 
-Creamos la carpeta para los datos de la base de datos y levantamos el stack:
+Creamos la carpeta para los datos de la base de datos y compilamos los servicios por separado para no saturar la memoria RAM:
 
 ```bash
 mkdir -p /mnt/ssd/tokioba-iot/data/postgres
 cd /mnt/ssd/tokioba-iot
-docker compose -f docker-compose.pi.yml up -d --build
+
+# 1. Compilar primero el backend solo
+docker compose -f docker-compose.pi.yml build api
+
+# 2. Compilar el frontend solo
+docker compose -f docker-compose.pi.yml build web
+
+# 3. Levantar todo el stack (como ya están compilados, levanta en 3 segundos)
+docker compose -f docker-compose.pi.yml up -d
 ```
 
-*(En la primera ejecución, compilará el frontend dentro del contenedor y descargará las imágenes base. Tardará ~3-4 minutos).*
+*(Al compilar primero el backend y luego el frontend por separado, evitamos que Docker compile ambos al mismo tiempo y sature los 1 GB de RAM. El frontend tardará ~2-3 minutos en su etapa multi-stage).*
 
 ### Verificación de consumo de RAM:
 ```bash
@@ -400,8 +408,10 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     # 1. Traer los cambios limpios
     git reset --hard origin/main
     
-    # 2. Reconstruir y actualizar contenedores Docker
-    docker compose -f docker-compose.pi.yml up -d --build
+    # 2. Reconstruir secuencialmente (api primero, luego web) para proteger la RAM
+    docker compose -f docker-compose.pi.yml build api
+    docker compose -f docker-compose.pi.yml build web
+    docker compose -f docker-compose.pi.yml up -d
     
     # 3. Limpiar imágenes viejas de Docker para no acumular espacio
     docker image prune -f >/dev/null 2>&1
