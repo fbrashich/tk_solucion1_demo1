@@ -671,4 +671,4 @@ docker logs -f telemetry_zrok
 | **Ver logs del backend en vivo** | `docker logs -f telemetry_api` |
 | **Ver temperatura del procesador** | `vcgencmd measure_temp` |
 | **Ver estado de la memoria y swaps** | `free -h && swapon --show` |
-| **Hacer backup de la base de datos** | `docker exec telemetry_db pg_dump -U postgres telemetry > /mnt/ssd/backup_$(date +%F).sql` |
+| **Hacer backup de la base de datos** | `docker exec telemetry_db pg_dump -U postgres telemetry > /mnt/ssd/backup_$(date +%F).sql` | 
