@@ -1,0 +1,54 @@
+# Antigravity Language Server Ignore File
+# Previene indexación pesada y consumo excesivo de memoria en Windows x64
+
+# Dependencias Node.js y compilaciones web
+node_modules/
+**/node_modules/**
+frontend/dist/
+frontend_dist/
+dist/
+dist-ssr/
+build/
+.next/
+.turbo/
+
+# Entornos virtuales Python y cachés
+__pycache__/
+**/__pycache__/**
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Datos persistentes de bases de datos y Docker
+data/
+data/postgres/
+postgres_ssd_data/
+*.sql
+*.sqlite3
+
+# Git y metadatos
+.git/
+**/.git/**
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+
+# Configuraciones locales y secretos temporales
+.zrok2/
+**/.zrok2/**
+*.local
+.env.local
+
+# Editores y SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
