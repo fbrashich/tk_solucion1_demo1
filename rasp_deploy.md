@@ -619,6 +619,44 @@ docker logs -f telemetry_zrok
 ```
 *Verás la confirmación de la sesión compartida con tu URL pública activa (ej. `https://iot-web-portal.shares.zrok.io`), lista para ser accedida desde cualquier navegador o teléfono móvil sin restricciones de red.*
 
+#### 5. Gestión y Solución de Problemas: Cambiar o Crear un Nuevo Share en ZROK
+
+##### ¿Por qué puede aparecer el error `unable to create share` o `the zrok service is busy, retry shortly`?
+1. **Conflicto con el entorno de Windows o nombre ocupado:** Al transferir la identidad `.zrok2` desde la PC, el servidor de Zrok puede detectar que el alias (o la identidad de ese entorno) todavía figura en uso por una sesión previa o superó el límite de peticiones simultáneas.
+2. **Nombre no reservado en el namespace (Zrok v2):** En Zrok v2, cualquier nombre especificado con `-n public:<alias>` debe existir previamente registrado en tu cuenta (`zrok create name -n public <alias>`). Si no fue creado, devolverá `name '<alias>' not found in namespace 'public'`.
+3. **Bucle de reintentos (Rate Limit HTTP 429):** Como el contenedor `telemetry_zrok` tiene `restart: unless-stopped`, si falla al iniciar intentará reconectarse inmediatamente una y otra vez. Eso satura la API de Zrok, provocando un bloqueo temporal por ráfagas (`the zrok service is busy, retry shortly`).
+
+##### Procedimiento paso a paso para cambiar o recrear un share limpio:
+
+1. **Frenar el contenedor `telemetry_zrok` para cortar el bucle:**
+   ```bash
+   docker compose -f docker-compose.pi.yml stop zrok
+   ```
+   *Verificación:* Al ejecutar `docker ps`, ya no debe figurar `telemetry_zrok` activo.
+
+2. **Liberar y registrar el nuevo nombre:**
+   > [!IMPORTANT]
+   > Si aún tienes corriendo un contenedor de Zrok en Docker Desktop en tu PC de Windows, apágalo primero para que ambas máquinas no compitan por el mismo túnel.
+
+   ```bash
+   # 1. Ver qué nombres tienes creados en la cuenta y si tienen un share activo asociado:
+   docker compose -f docker-compose.pi.yml run --rm zrok list names
+
+   # 2. Si el nombre quedó tomado o deseas recrearlo limpio:
+   docker compose -f docker-compose.pi.yml run --rm zrok delete name -n public iot-web-portal
+   docker compose -f docker-compose.pi.yml run --rm zrok create name -n public iot-web-portal
+   ```
+   *Verificación:* La terminal devolverá `deleted name 'iot-web-portal'` y luego `created name 'iot-web-portal' in namespace 'public'`.
+
+3. **Esperar 60 segundos y volver a levantar el servicio:**
+   Espera 1 minuto de reloj para que expire cualquier bloqueo temporal (*service is busy*) en los servidores de Zrok y levanta el contenedor:
+   ```bash
+   docker compose -f docker-compose.pi.yml up -d zrok
+   docker logs -f telemetry_zrok
+   ```
+   *Verificación:* El log confirmará la sesión compartida:
+   `access your zrok share at the following endpoints: iot-web-portal.shares.zrok.io`
+
 ---
 
 ## 14. Comandos Esenciales de Monitoreo y Mantenimiento

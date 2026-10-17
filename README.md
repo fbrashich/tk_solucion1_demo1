@@ -63,7 +63,7 @@ El script de inicialización crea automáticamente dos cuentas listas para usar:
 
 La plataforma integra el servicio **Zrok 2** directamente en Docker Compose con un nombre reservado permanente:
 
-* **URL Pública Fija**: [https://tk-iot-demo.shares.zrok.io](https://tk-iot-demo.shares.zrok.io)
+* **URL Pública Fija**: [https://iot-web-portal.shares.zrok.io](https://iot-web-portal.shares.zrok.io)
 * **Arranque 100% Automático**: Se inicia junto con toda la plataforma al levantar Docker:
   ```bash
   docker compose up -d
