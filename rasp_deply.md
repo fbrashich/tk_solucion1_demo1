@@ -549,12 +549,12 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos 
 * **Proxy Protocol:** `None`
 
 #### Pasos en la Raspberry Pi:
-1. **Instalar Playit.gg:**
+1. **Instalar / Actualizar Playit.gg al repositorio oficial:**
+   > [!IMPORTANT]
+   > El antiguo repositorio PPA de GitHub (`playit-cloud.github.io/ppa`) quedó congelado en la versión obsoleta `1.0.9`. Esa versión antigua falla con el error `got unexpected response from register request ... UdpChannelDetails` porque no soporta el protocolo actual de los servidores de Playit. Se debe utilizar el repositorio oficial activo:
    ```bash
-   curl -SsL https://playit-cloud.github.io/ppa/key.gpg | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/playit.gpg >/dev/null
-   echo "deb [signed-by=/etc/apt/trusted.gpg.d/playit.gpg] https://playit-cloud.github.io/ppa/data ./" | sudo tee /etc/apt/sources.list.d/playit.list
-   sudo apt update
-   sudo apt install -y playit
+   # Instalar el repositorio oficial y actualizar a la última versión:
+   curl -fsSL https://packages.playit.gg/install.sh | sudo bash
    ```
 
 2. **Requisito Crítico: Sincronización Horaria NTP (Imprescindible en Raspberry Pi):**
