@@ -4,3 +4,10 @@ __pycache__/
 .env
 .DS_Store
 *.log
+
+# Archivos privados de credenciales y claves (NO SUBIR A GIT)
+secrets.md
+credentials.md
+*.secrets.*
+*.credentials.*
+private_credentials.md
