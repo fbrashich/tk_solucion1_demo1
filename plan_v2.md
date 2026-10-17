@@ -41,9 +41,9 @@ graph TD
 > **Objetivo:** Independizarse totalmente de servidores demo externos, consolidar la ingesta probada en la PoC e incorporar parámetros reales de maquinaria en la base de datos PostgreSQL.
 
 #### 1.1 Ingesta Telemática Directa en Backend / Traccar Local
-* **Topología de Red Validada:**
-  * **Túnel TCP Teltonika (Portmap.io OpenVPN):** `federicobrashich-53772.portmap.host:53772` $\rightarrow$ `127.0.0.1:5027` (Pi).
-  * **Túnel UDP Teltonika (Playit.gg):** `practically-containers.tun.ply.gg:64501` $\rightarrow$ `127.0.0.1:5027` (Pi).
+* **Topología de Red Validada por IP Directa:**
+  * **Túnel TCP Teltonika (Portmap.io OpenVPN):** IP **`193.161.193.99:53772`** $\rightarrow$ `127.0.0.1:5027` (Pi).
+  * **Túnel UDP Teltonika (Playit.gg):** IP **`147.185.221.214:64501`** $\rightarrow$ `127.0.0.1:5027` (Pi).
   * **Túnel Web Dashboard (Zrok):** `https://iot-web-portal.shares.zrok.io` $\rightarrow$ `web:80` (Dashboard).
 * **Estrategia de Ingesta:** Recepción en puerto 5027 mediante Traccar Headless ultraliviano en Docker (`-Xmx180m`) o Listener nativo Python Teltonika (Codec 8) integrado en FastAPI.
 * **Frecuencia de sincronización / ingesta:** En tiempo real vía TCP/UDP o sondeo local a base de datos cada 5 a 15 segundos con almacenamiento en búfer ante contingencias.

@@ -532,9 +532,12 @@ Ahora tu flujo de trabajo como desarrollador es 100% libre:
 ## 13. PASO 11: Exposición Externa Híbrida: Teltonika GPS (TCP Playit) + Web Dashboard (HTTP ZROK)
 
 Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/oficina, implementamos una solución híbrida especializada:
-1. **Tráfico TCP (Rastreadores GPS Teltonika):** Vía **Portmap.io (OpenVPN)**, túnel estándar de Capa 4 validado desde red celular 4G real, con IP/Host dedicado y reconexión automática por systemd.
-2. **Tráfico UDP (Rastreadores GPS Teltonika):** Vía **Playit.gg**, como alternativa de alta eficiencia para telemetría ligera.
+1. **Tráfico TCP (Rastreadores GPS Teltonika):** Vía **Portmap.io (OpenVPN)** por IP directa **`193.161.193.99:53772`**, probado y validado desde red celular 4G real.
+2. **Tráfico UDP (Rastreadores GPS Teltonika):** Vía **Playit.gg** por IP directa **`147.185.221.214:64501`**, probado y validado desde red celular 4G real.
 3. **Tráfico HTTP (Dashboard Web):** Vía **ZROK en Docker**, con SSL automático y URL fija reservada (`https://iot-web-portal.shares.zrok.io`).
+
+> [!NOTE]
+> Para evitar depender de resoluciones DNS o nombres de host largos en el firmware de los dispositivos GPS, **ambos canales operan de forma directa por dirección IP numérica**.
 
 ---
 
@@ -542,12 +545,11 @@ Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/ofi
 
 Implementamos un túnel TCP nativo sobre **OpenVPN** mediante el servicio **Portmap.io**, probado y verificado exitosamente desde un teléfono móvil sobre red celular 4G:
 
-* **Host / Dominio de Entrada:** `federicobrashich-53772.portmap.host`
-* **IP Pública de Entrada:** `193.161.193.99`
+* **IP Pública de Entrada Directa:** **`193.161.193.99`**
 * **Puerto Público Externo:** **`53772`** *(TCP)*
 * **Destino Local en la Raspberry Pi:** Puerto **`5027`** *(TCP)*
 * **Interfaz Virtual en la Pi:** `tun0` (IP de túnel `10.9.0.x`)
-* **Archivo de Configuración:** `federico_brashich.iot-tpc-demo.ovpn` (incluido en la raíz del repositorio)
+* **Archivo de Configuración:** `federico_brashich.iot-tpc-demo.ovpn` (en la raíz del repositorio)
 
 #### Pasos de Instalación y Activación en la Raspberry Pi:
 1. **Actualizar el repositorio en la Pi:**
@@ -576,7 +578,7 @@ Implementamos un túnel TCP nativo sobre **OpenVPN** mediante el servicio **Port
    *(El log confirmará `Initialization Sequence Completed` y la creación de `tun0`).*
 
 5. **Configuración en los Rastreadores Teltonika (FMC920 / FMB920 por SMS o Teltonika Configurator):**
-   * **Target Server Domain:** `federicobrashich-53772.portmap.host` *(o IP `193.161.193.99`)*
+   * **Target Server IP:** **`193.161.193.99`** *(sin nombres de dominio)*
    * **Target Server Port:** **`53772`**
    * **Protocol:** **`TCP`**
 
@@ -584,27 +586,20 @@ Implementamos un túnel TCP nativo sobre **OpenVPN** mediante el servicio **Port
 
 ### 13.2 Solución UDP para Rastreadores GPS Teltonika (Playit.gg)
 
-Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignados y **validados bidireccionalmente con éxito**:
+Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignados y **validados bidireccionalmente por IP**:
 
-* **Túnel Activo Validado:** `iot-tokioba` (UDP)
-* **Dominio asignado:** `practically-containers.tun.ply.gg`
-* **IP Pública de entrada:** `147.185.221.214`
-* **Puerto Público Externo:** **`64501`** *(asignado por Playit)*
-* **Destino Local en la Pi:** `127.0.0.1:5027` *(UDP/TCP)*
+* **IP Pública de Entrada Directa:** **`147.185.221.214`**
+* **Puerto Público Externo:** **`64501`** *(UDP)*
+* **Destino Local en la Pi:** Puerto **`5027`** *(UDP)*
 * **Proxy Protocol:** `None`
 
 #### Pasos en la Raspberry Pi:
 1. **Instalar / Actualizar Playit.gg al repositorio oficial:**
-   > [!IMPORTANT]
-   > El antiguo repositorio PPA de GitHub (`playit-cloud.github.io/ppa`) quedó congelado en la versión obsoleta `1.0.9`. Esa versión antigua falla con el error `got unexpected response from register request ... UdpChannelDetails` porque no soporta el protocolo actual de los servidores de Playit. Se debe utilizar el repositorio oficial activo:
    ```bash
-   # Instalar el repositorio oficial y actualizar a la última versión:
    curl -fsSL https://packages.playit.gg/install.sh | sudo bash
    ```
 
-2. **Requisito Crítico: Sincronización Horaria NTP (Imprescindible en Raspberry Pi):**
-   > [!IMPORTANT]
-   > La Raspberry Pi no tiene pila de reloj (RTC). Si la hora se desfasa por más de 10 segundos, los servidores de Playit rechazan la autenticación con error `RegisterUnauthorized`. Configura la zona horaria y activa la sincronización por red:
+2. **Requisito Crítico: Sincronización Horaria NTP:**
    ```bash
    sudo timedatectl set-timezone America/Argentina/Buenos_Aires
    sudo timedatectl set-ntp true
@@ -612,22 +607,16 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignado
    timedatectl
    ```
 
-3. **Requisito de Conectividad: Desactivar IPv6 (Evita bucles de reconexión y timeouts en Playit):**
-   > [!WARNING]
-   > En conexiones residenciales y móviles, los routers asignan direcciones IPv6 locales pero carecen de enrutamiento IPv6 global funcional hacia la nube. Como el agente de Playit prioriza IPv6 (`[2602:fbaf:...]`), las peticiones a la API y el ping UDP de control caen en *timeout* (`timeout waiting for pong`, `failed to reload_control_addr`, `code: 110 TimedOut`) provocando reconexiones continuas. Para forzar tráfico puro por IPv4:
+3. **Requisito de Conectividad: Desactivar IPv6 (Forzar IPv4 puro):**
    ```bash
-   # 1. Desactivar IPv6 a nivel del sistema operativo:
    sudo tee /etc/sysctl.d/99-disable-ipv6.conf <<EOF
    net.ipv6.conf.all.disable_ipv6 = 1
    net.ipv6.conf.default.disable_ipv6 = 1
    net.ipv6.conf.lo.disable_ipv6 = 1
    EOF
    sudo sysctl --system
-
-   # 2. Reiniciar el agente de Playit:
    sudo systemctl restart playit
    ```
-   *(Además, en el panel web de Playit.gg -> Agents -> Tu Agente -> Configuración -> Seleccionar **"Only IPv4"**).*
 
 4. **Habilitar Playit como servicio del sistema en segundo plano:**
    ```bash
@@ -635,27 +624,38 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignado
    sudo systemctl status playit
    ```
 
-5. **Configuración en los Rastreadores Teltonika (Teltonika Configurator / SMS):**
-   * **Target Server Domain:** `practically-containers.tun.ply.gg` *(o IP `147.185.221.214`)*
+5. **Configuración en los Rastreadores Teltonika (Modo UDP):**
+   * **Target Server IP:** **`147.185.221.214`** *(sin nombres de dominio)*
    * **Target Server Port:** **`64501`**
-   * **Protocol:** **`UDP`** *(o TCP según el túnel configurado)*
-
-6. **Validar la Conexión Bidireccional desde tu PC (Python UDP Echo Test):**
-   Para comprobar que el túnel está respondiendo y reenviando al puerto 5027 de la Pi:
-   ```python
-   import socket
-   sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-   sock.settimeout(5)
-   sock.sendto(b'HOLA_UDP_DESDE_PC\n', ('147.185.221.214', 64501))
-   data, addr = sock.recvfrom(1024)
-   print('Respuesta recibida:', data)
-   sock.close()
-   ```
-   *(Confirmado bidireccionalmente con `OK_DESDE_RASPBERRY_UDP`).*
+   * **Protocol:** **`UDP`**
 
 ---
 
-### 13.3 Solución HTTP para el Web Dashboard (ZROK en Docker)
+### 13.3 Script de Verificación Dual en la Raspberry Pi (`receiver_demo.py`)
+
+Incluido en el repositorio para validar en cualquier momento la llegada de paquetes de telemetría a ambos túneles simultáneamente:
+
+```bash
+cd /mnt/ssd/tokioba-iot
+python3 receiver_demo.py
+```
+
+**Evidencia de Verificación Exitosa en Vivo (Red Móvil 4G):**
+```text
+=================================================================
+  TOKIOBA IoT - RECEPTOR DUAL TELEMETRÍA (PUERTO 5027)
+  TCP: Portmap.io -> 193.161.193.99:53772
+  UDP: Playit.gg  -> 147.185.221.214:64501
+=================================================================
+>>> [UDP] Receptor activo escuchando en 0.0.0.0:5027 (Playit.gg)
+>>> [TCP] Receptor activo escuchando en 0.0.0.0:5027 (Portmap.io)
+[2026-10-17 16:25:47] [TCP] Conexión desde: ('10.9.0.1', 28412) | Datos (20 bytes): hola desde celular 3
+[2026-10-17 16:26:32] [UDP] Conexión desde: ('127.255.179.93', 56514) | Datos (17 bytes): udp desde celular
+```
+
+---
+
+### 13.4 Solución HTTP para el Web Dashboard (ZROK en Docker)
 
 Recuperamos la configuración de **ZROK** probada en la PC (`openziti/zrok2:latest`), logrando una URL pública con SSL automático y reservada bajo el alias `public:iot-web-portal`.
 
