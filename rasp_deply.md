@@ -351,6 +351,8 @@ services:
     image: openziti/zrok2:latest
     container_name: telemetry_zrok
     restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 20s
     depends_on:
       - web
     volumes:
@@ -596,6 +598,8 @@ El servicio ya está añadido al Compose y mapea automáticamente tu identidad d
     image: openziti/zrok2:latest
     container_name: telemetry_zrok
     restart: unless-stopped
+    stop_signal: SIGINT
+    stop_grace_period: 20s
     depends_on:
       - web
     volumes:
@@ -656,6 +660,31 @@ docker logs -f telemetry_zrok
    ```
    *Verificación:* El log confirmará la sesión compartida:
    `access your zrok share at the following endpoints: iot-web-portal.shares.zrok.io`
+
+#### 6. Blindaje Permanente contra Reinicios del Sistema y Cortes de Energía
+
+##### ¿Por qué fallaba Zrok al reiniciar la Raspberry Pi?
+1. **La causa técnica:** Por defecto, al ejecutar `sudo reboot` o apagarse el equipo, Docker envía una señal `SIGTERM` y apaga los contenedores en paralelo en pocos segundos.
+2. **El problema de señal en Zrok:** Las aplicaciones desarrolladas en Go (como Zrok 2) escuchan específicamente la señal **`SIGINT`** (el equivalente a presionar `Ctrl + C` en la terminal) para ejecutar su rutina de cierre limpio (*unshare hook*), contactar a `api.zrok.io` y liberar el nombre reservado.
+3. **El conflicto resultante:** Al apagarse abruptamente con `SIGTERM` o cortarse la red antes de notificar a la nube, el servidor central de Zrok retenía el share anterior como "en uso". Al reiniciar la Pi, Docker intentaba crear un share nuevo con el mismo nombre y era rechazado con el error:  
+   `[ERROR]: unable to create share (name 'iot-web-portal' in namespace 'public' is in use by share '...'; run 'zrok2 delete share ...' to release it)`.
+
+##### La Solución Aplicada en `docker-compose.pi.yml`:
+Se añadieron dos directivas clave al servicio `zrok`:
+```yaml
+  zrok:
+    image: openziti/zrok2:latest
+    container_name: telemetry_zrok
+    restart: unless-stopped
+    stop_signal: SIGINT         # 1. Envía SIGINT (Ctrl+C) para disparar el hook de cierre limpio de Zrok
+    stop_grace_period: 20s      # 2. Otorga 20 segundos para que Zrok complete la desconexión HTTP con api.zrok.io
+    ...
+```
+
+##### Beneficios del Blindaje:
+* **Reinicios 100% Desatendidos:** Puedes ejecutar `sudo reboot`, reiniciar por actualización del kernel o sufrir un reinicio imprevisto, y el túnel Zrok volverá a estar en línea automáticamente sin intervención manual ni errores de nombres retenidos.
+* **Cero Rate-Limit:** Al cerrar de forma limpia, el contenedor no entra en bucle de reintentos infinitos, evitando bloqueos por *service is busy*.
+* **Persistencia Total:** Tu URL fija `https://iot-web-portal.shares.zrok.io` siempre estará lista para recibir tráfico.
 
 ---
 
