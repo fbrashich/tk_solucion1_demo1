@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+<properties>
+
+    <!-- Base Database (Embedded H2 on SSD) -->
+    <entry key='database.driver'>org.h2.Driver</entry>
+    <entry key='database.url'>jdbc:h2:./data/traccar;DB_CLOSE_DELAY=-1;DEFRAG_ALWAYS=TRUE</entry>
+    <entry key='database.user'>sa</entry>
+    <entry key='database.password'></entry>
+
+    <!-- Automatically register unknown trackers (FMC920, FMB920, ATC700, etc) -->
+    <entry key='database.registerUnknown'>true</entry>
+
+    <!-- Teltonika protocol configuration (TCP & UDP on port 5027) -->
+    <entry key='teltonika.port'>5027</entry>
+    <entry key='teltonika.timeout'>120</entry>
+
+    <!-- Web UI & REST API -->
+    <entry key='web.port'>8082</entry>
+    <entry key='web.path'>./web</entry>
+
+    <!-- Optimization for Raspberry Pi 4 (1GB RAM) -->
+    <entry key='geocoder.enable'>false</entry>
+    <entry key='filter.enable'>false</entry>
+    <entry key='event.enable'>true</entry>
+
+</properties>

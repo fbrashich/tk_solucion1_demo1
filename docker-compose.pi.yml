@@ -27,6 +27,33 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Ingestor Telemático Traccar (Headless ultraliviano para Teltonika FMC/FMB920)
+  traccar:
+    image: traccar/traccar:alpine
+    container_name: telemetry_traccar
+    restart: unless-stopped
+    ports:
+      # Puerto 5027 mapeado tanto TCP (Portmap.io) como UDP (Playit.gg)
+      - "5027:5027/tcp"
+      - "5027:5027/udp"
+      - "8082:8082"
+    volumes:
+      - /mnt/ssd/tokioba-iot/traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      - /mnt/ssd/tokioba-iot/data/traccar/logs:/opt/traccar/logs
+      - /mnt/ssd/tokioba-iot/data/traccar/data:/opt/traccar/data
+    environment:
+      # Optimización estricta JVM para Raspberry Pi de 1 GB RAM
+      - JAVA_TOOL_OPTIONS=-Xms48m -Xmx160m -XX:+UseSerialGC
+    deploy:
+      resources:
+        limits:
+          memory: 220M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+
   # Backend FastAPI Tokioba
   api:
     build:
@@ -39,15 +66,15 @@ services:
       - SECRET_KEY=tokioba_super_secret_pi_key_2026
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
-      - TRACCAR_URL=https://demo4.traccar.org
-      - TRACCAR_EMAIL=fabianb@tokioba.com
-      - TRACCAR_PASSWORD=Radius@1290!
-      - TRACCAR_TOKEN=ehbiEoV1hUuCqWIQu0bpWZ:APA91bEoJ55-LLnp_udh3ZXpQXua_GfSup_Ttoh8_Ms_-iQUnOzNpbWgqq4wHFDyPjFYpjlXiksyI704909AB7fCbzOAxnBjH7_ULR9Zw4xo2A_YpATk3dA
+      - TRACCAR_URL=http://traccar:8082
+      - TRACCAR_EMAIL=admin@tokioba.com
+      - TRACCAR_PASSWORD=tokioba_admin_2026
       - TRACCAR_SYNC_INTERVAL=5
     ports:
       - "8000:8000"
     depends_on:
       - db
+      - traccar
     deploy:
       resources:
         limits:

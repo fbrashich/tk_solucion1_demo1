@@ -765,6 +765,45 @@ Se añadieron dos directivas clave al servicio `zrok`:
 
 ---
 
+### 13.5 Ingestor Telemático Autónomo (Traccar Alpine en Docker)
+
+Se eliminó completamente la dependencia de servidores demo externos (`demo4.traccar.org`), integrando un contenedor Traccar nativo ultraliviano para procesar telemetría Teltonika (Codec 8 / Codec 8 Extended) de forma 100% local en la Raspberry Pi.
+
+#### 1. Topología de Red y Enrutamiento Local
+* **Ingesta TCP (Portmap.io OpenVPN):** IP pública `193.161.193.99:53772` $\rightarrow$ Pi `0.0.0.0:5027/tcp` $\rightarrow$ Traccar contenedor `5027/tcp`.
+* **Ingesta UDP (Playit.gg):** IP pública `147.185.221.214:64501` $\rightarrow$ Pi `0.0.0.0:5027/udp` $\rightarrow$ Traccar contenedor `5027/udp`.
+* **API REST & Sincronización Interna:** Puerto `8082` expuesto en la red bridge interna de Docker (`http://traccar:8082`).
+
+#### 2. Configuración Optimizada de Traccar (`traccar/traccar.xml`)
+Se definió almacenamiento embebido H2 persistente en SSD (`/mnt/ssd/tokioba-iot/data/traccar/data`), registro automático de trackers no catalogados (`database.registerUnknown=true`) y optimización de rendimiento:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+<properties>
+    <entry key='database.driver'>org.h2.Driver</entry>
+    <entry key='database.url'>jdbc:h2:./data/traccar;DB_CLOSE_DELAY=-1;DEFRAG_ALWAYS=TRUE</entry>
+    <entry key='database.user'>sa</entry>
+    <entry key='database.password'></entry>
+    <entry key='database.registerUnknown'>true</entry>
+    <entry key='teltonika.port'>5027</entry>
+    <entry key='teltonika.timeout'>120</entry>
+    <entry key='web.port'>8082</entry>
+    <entry key='web.path'>./web</entry>
+    <entry key='geocoder.enable'>false</entry>
+    <entry key='filter.enable'>false</entry>
+</properties>
+```
+
+#### 3. Restricciones Estrictas de RAM (JVM en Raspberry Pi 1 GB)
+Traccar corre con imagen oficial ARM64 `traccar/traccar:alpine` con límites acotados:
+* `JAVA_TOOL_OPTIONS`: `-Xms48m -Xmx160m -XX:+UseSerialGC`
+* Límite en Docker Compose: `memory: 220M`
+
+#### 4. Auto-Inicialización y Sincronizador Bidireccional (`traccar_sync.py`)
+El servicio backend en FastAPI detecta automáticamente si Traccar es nuevo (`newServer: true`), crea el usuario administrador (`admin@tokioba.com` / `tokioba_admin_2026`) sin intervención manual, registra en Traccar los dispositivos existentes en PostgreSQL y actualiza las tablas `telemetry_events` y `device_states` cada 5 segundos.
+
+---
+
 ## 14. Comandos Esenciales de Monitoreo y Mantenimiento
 
 | Acción | Comando en la Raspberry Pi |

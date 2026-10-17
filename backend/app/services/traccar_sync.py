@@ -40,7 +40,7 @@ class TraccarSynchronizer:
         self.device_name_map: dict[int, str] = {}
         self.is_running = False
 
-    def _sync_request(self, path: str, method: str = "GET", data: dict = None) -> tuple[int, any]:
+    def _sync_request(self, path: str, method: str = "GET", data: dict = None, json_data: dict = None) -> tuple[int, any]:
         url = f"{TRACCAR_URL}{path}"
         headers = {
             "User-Agent": "TK-Telemetry-Sync/1.0",
@@ -50,6 +50,9 @@ class TraccarSynchronizer:
         if data is not None:
             encoded_data = urllib.parse.urlencode(data).encode("utf-8")
             headers["Content-Type"] = "application/x-www-form-urlencoded"
+        elif json_data is not None:
+            encoded_data = json.dumps(json_data).encode("utf-8")
+            headers["Content-Type"] = "application/json"
 
         req = urllib.request.Request(url, data=encoded_data, headers=headers, method=method)
         try:
@@ -79,9 +82,35 @@ class TraccarSynchronizer:
         if status == 200:
             logger.info(f"[TRACCAR SYNC] Autenticación exitosa en {TRACCAR_URL} con usuario {TRACCAR_EMAIL}")
             return True
-        else:
-            logger.error(f"[TRACCAR SYNC] Error de autenticación (HTTP {status}): {body}")
-            return False
+
+        # Verificar si es un servidor Traccar recién desplegado (newServer: true)
+        def check_server():
+            return self._sync_request("/api/server")
+
+        srv_status, srv_body = await asyncio.to_thread(check_server)
+        if srv_status == 200 and isinstance(srv_body, dict) and srv_body.get("newServer"):
+            logger.info("[TRACCAR SYNC] Servidor Traccar local sin inicializar. Creando usuario administrador...")
+            def create_admin():
+                return self._sync_request(
+                    "/api/users",
+                    method="POST",
+                    json_data={
+                        "name": "Administrador Tokioba",
+                        "email": TRACCAR_EMAIL,
+                        "password": TRACCAR_PASSWORD,
+                        "administrator": True
+                    }
+                )
+            reg_status, reg_body = await asyncio.to_thread(create_admin)
+            if reg_status in (200, 201):
+                logger.info("[TRACCAR SYNC] Administrador inicial creado con éxito en Traccar.")
+                status, body = await asyncio.to_thread(do_auth)
+                if status == 200:
+                    logger.info(f"[TRACCAR SYNC] Autenticación exitosa tras inicialización en {TRACCAR_URL}")
+                    return True
+
+        logger.error(f"[TRACCAR SYNC] Error de autenticación (HTTP {status}): {body}")
+        return False
 
     async def refresh_devices(self) -> bool:
         def do_get_devices():
@@ -98,6 +127,31 @@ class TraccarSynchronizer:
             self.device_map = {d["id"]: str(d["uniqueId"]) for d in devices if "id" in d and "uniqueId" in d}
             self.device_name_map = {d["id"]: d.get("name", "Desconocido") for d in devices if "id" in d}
             logger.info(f"[TRACCAR SYNC] Dispositivos sincronizados desde Traccar: {self.device_map}")
+
+            # Sincronizar catálogo local de PostgreSQL hacia Traccar si faltan
+            existing_uniques = set(self.device_map.values())
+            try:
+                async with AsyncSessionLocal() as db:
+                    res = await db.execute(select(Device).where(Device.is_active == True))
+                    local_devs = res.scalars().all()
+                    for dev in local_devs:
+                        target_id = str(dev.traccar_unique_id or dev.device_id)
+                        if target_id and target_id not in existing_uniques:
+                            logger.info(f"[TRACCAR SYNC] Registrando dispositivo {dev.name} ({target_id}) en Traccar...")
+                            def create_dev(name=dev.name, uid=target_id):
+                                return self._sync_request(
+                                    "/api/devices",
+                                    method="POST",
+                                    json_data={"name": name, "uniqueId": uid}
+                                )
+                            c_status, c_resp = await asyncio.to_thread(create_dev)
+                            if c_status in (200, 201) and isinstance(c_resp, dict) and "id" in c_resp:
+                                self.device_map[c_resp["id"]] = str(c_resp["uniqueId"])
+                                self.device_name_map[c_resp["id"]] = c_resp.get("name", dev.name)
+                                existing_uniques.add(str(c_resp["uniqueId"]))
+            except Exception as e:
+                logger.warning(f"[TRACCAR SYNC] Advertencia sincronizando catálogo con Traccar: {e}")
+
             return True
         else:
             logger.warning(f"[TRACCAR SYNC] No se pudo obtener lista de dispositivos: HTTP {status}")
