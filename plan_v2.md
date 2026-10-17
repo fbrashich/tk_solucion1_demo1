@@ -40,9 +40,12 @@ graph TD
 ### Fase 1: Consolidación de Ingesta, Autonomía y Calibración
 > **Objetivo:** Independizarse totalmente de servidores demo externos, consolidar la ingesta probada en la PoC e incorporar parámetros reales de maquinaria en la base de datos PostgreSQL.
 
-#### 1.1 Ingesta Telemática Directa en Backend (`telemetry_api`)
-* **Acción:** Trasladar la lógica del cliente de la PoC (`GPSWoxClient` / Teltonika) al servicio en segundo plano de FastAPI (`services/gpswox_sync_service.py`).
-* **Frecuencia de sondeo / ingesta:** Polling asíncrono cada 15 a 30 segundos (o webhook si aplica) con manejo robusto de reconexión y almacenamiento en búfer ante caídas de red.
+#### 1.1 Ingesta Telemática Directa en Backend / Traccar Local
+* **Topología de Red Validada:**
+  * **Túnel de Telemetría (Playit.gg):** `practically-containers.tun.ply.gg:64501` (UDP) $\rightarrow$ `127.0.0.1:5027` (Pi).
+  * **Túnel Web (Zrok):** `https://iot-web-portal.shares.zrok.io` $\rightarrow$ `web:80` (Dashboard).
+* **Estrategia de Ingesta:** Recepción en puerto 5027 mediante Traccar Headless ultraliviano en Docker (`-Xmx180m`) o Listener nativo Python Teltonika (Codec 8) integrado en FastAPI.
+* **Frecuencia de sincronización / ingesta:** En tiempo real vía UDP/TCP o sondeo local a base de datos cada 5 a 15 segundos con almacenamiento en búfer ante contingencias.
 * **Persistencia en PostgreSQL:** Almacenar en `telemetry_events` y `device_states`:
   * Batería externa e interna (voltaje y %).
   * Sensores Teltonika (`io68` corriente, `io113` nivel de carga, `io16` ignición).

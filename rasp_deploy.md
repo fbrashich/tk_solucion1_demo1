@@ -537,15 +537,15 @@ Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/ofi
 
 ---
 
-### 13.1 Solución TCP para Rastreadores GPS Teltonika (Playit.gg)
+### 13.1 Solución UDP / TCP para Rastreadores GPS Teltonika (Playit.gg)
 
-Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos asignados y validados:
+Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignados y **validados bidireccionalmente con éxito**:
 
-* **Túnel:** `iot-tokioba`
-* **Dominio asignado:** `practically-doing.tun.ply.gg`
-* **IP Pública de entrada:** `147.185.221.216`
-* **Puerto Público Externo:** **`60715`** *(asignado por Playit)*
-* **Destino Local en la Pi:** `127.0.0.1:5027`
+* **Túnel Activo Validado:** `iot-tokioba` (UDP)
+* **Dominio asignado:** `practically-containers.tun.ply.gg`
+* **IP Pública de entrada:** `147.185.221.214`
+* **Puerto Público Externo:** **`64501`** *(asignado por Playit)*
+* **Destino Local en la Pi:** `127.0.0.1:5027` *(UDP/TCP)*
 * **Proxy Protocol:** `None`
 
 #### Pasos en la Raspberry Pi:
@@ -582,7 +582,7 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos 
    # 2. Reiniciar el agente de Playit:
    sudo systemctl restart playit
    ```
-   *(Opcional en el panel web de Playit.gg -> Agents -> Tu Agente -> Configuración -> Seleccionar "Only IPv4").*
+   *(Además, en el panel web de Playit.gg -> Agents -> Tu Agente -> Configuración -> Seleccionar **"Only IPv4"**).*
 
 4. **Habilitar Playit como servicio del sistema en segundo plano:**
    ```bash
@@ -590,17 +590,23 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos 
    sudo systemctl status playit
    ```
 
-4. **Configuración en los Rastreadores Teltonika (Teltonika Configurator / SMS):**
-   * **Target Server Domain:** `practically-doing.tun.ply.gg` *(o IP `147.185.221.216`)*
-   * **Target Server Port:** **`60715`**
-   * **Protocol:** `TCP`
+5. **Configuración en los Rastreadores Teltonika (Teltonika Configurator / SMS):**
+   * **Target Server Domain:** `practically-containers.tun.ply.gg` *(o IP `147.185.221.214`)*
+   * **Target Server Port:** **`64501`**
+   * **Protocol:** **`UDP`** *(o TCP según el túnel configurado)*
 
-5. **Validar la Conexión TCP desde tu PC (PowerShell):**
+6. **Validar la Conexión Bidireccional desde tu PC (Python UDP Echo Test):**
    Para comprobar que el túnel está respondiendo y reenviando al puerto 5027 de la Pi:
-   ```powershell
-   Test-NetConnection -ComputerName practically-doing.tun.ply.gg -Port 60715
+   ```python
+   import socket
+   sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+   sock.settimeout(5)
+   sock.sendto(b'HOLA_UDP_DESDE_PC\n', ('147.185.221.214', 64501))
+   data, addr = sock.recvfrom(1024)
+   print('Respuesta recibida:', data)
+   sock.close()
    ```
-   *(Retorna `TcpTestSucceeded : True` confirmando enlace activo).*
+   *(Confirmado bidireccionalmente con `OK_DESDE_RASPBERRY_UDP`).*
 
 ---
 
