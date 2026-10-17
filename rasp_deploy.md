@@ -10,41 +10,93 @@ Esta guía detalla la implementación completa para la plataforma telemática **
 
 ## 1. Topología del Sistema y Flujo de Desarrollo
 
+La arquitectura implementada conecta la capa de desarrollo en la nube con la Raspberry Pi 4B física y despliega canales de ingesta telemática directa mediante túneles públicos con IPs numéricas fijas, recepción en Traccar autónomo, persistencia en PostgreSQL y acceso web con SSL mediante ZROK.
+
+### 1.1 Diagrama Integral del Despliegue Armado
+
+```mermaid
+graph TD
+    subgraph EXT["🌐 Red Externa / Dispositivos Móviles"]
+        DEV_TCP["🚜 Trackers Teltonika (TCP)<br/>FMC920 / FMB920"]
+        DEV_UDP["🚜 Trackers Teltonika (UDP)<br/>FMC920 / FMB920"]
+        CLIENT["💻 Clientes / Operadores<br/>Navegador Web / Celular"]
+        ADMIN["🛠️ Administrador Remoto<br/>PC / Laptop"]
+        DEV_LAPTOP["💻 Entorno de Desarrollo<br/>Antigravity IDE"]
+    end
+
+    subgraph CLOUD["☁️ Servicios Cloud & Túneles Públicos"]
+        GH["GitHub<br/>fbrashich/tk_solucion1_demo1"]
+        PORTMAP["Portmap.io (OpenVPN TCP)<br/>IP Fija: 193.161.193.99:53772"]
+        PLAYIT["Playit.gg (UDP Tunnel Anycast)<br/>IP Fija: 147.185.221.214:64501"]
+        ZROK_CLOUD["ZROK v2 Cloud Router<br/>https://iot-web-portal.shares.zrok.io"]
+    end
+
+    subgraph RPI["🍓 RASPBERRY PI 4B (1 GB RAM - SRVIOT01)"]
+        subgraph OS["Sistema Operativo & Servicios Host"]
+            OVPN_SVC["openvpn-client@portmap<br/>(Túnel TCP virtual tun0)"]
+            PLY_SVC["playitd.service<br/>(Daemon v1.0.10 IPv4)"]
+            ZRAM["ZRAM (450 MB en RAM)<br/>+ Swap Respaldo (1 GB en SSD)"]
+            AUTODEPLOY["tokioba-autodeploy.timer<br/>(Chequeo CI/CD cada 2 min)"]
+        end
+
+        subgraph DOCKER["Docker Engine (/mnt/ssd/docker)"]
+            TRACCAR["telemetry_traccar<br/>Traccar 6.16 Alpine (-Xmx160m)<br/>Puertos: 5027 TCP/UDP | 8082 HTTP"]
+            API["telemetry_api<br/>FastAPI Tokioba Backend<br/>Worker traccar_sync.py (Polling 5s)"]
+            DB[("telemetry_db<br/>PostgreSQL 15 Alpine<br/>telemetry_events & device_states")]
+            WEB["telemetry_web<br/>Nginx Servidor Web (Port 3000:80)"]
+            ZROK_CONT["telemetry_zrok<br/>Zrok2 Headless Client (SIGINT)"]
+        end
+
+        subgraph SSD["💾 Almacenamiento SSD USB 3.0 (/mnt/ssd)"]
+            DATA_PG["/data/postgres (Tablas Tokioba)"]
+            DATA_TR["/data/traccar (Base H2 Traccar)"]
+            REPO["/tokioba-iot (Repo Git & deploy.sh)"]
+        end
+    end
+
+    %% Flujo CI/CD
+    DEV_LAPTOP -->|1. git push origin main| GH
+    AUTODEPLOY -->|2. git pull & build secuencial| REPO
+    REPO -.->|3. Recrea contenedores| DOCKER
+
+    %% Ingesta Telemática
+    DEV_TCP -->|TCP 53772| PORTMAP
+    PORTMAP -->|Túnel tun0| OVPN_SVC
+    OVPN_SVC -->|127.0.0.1:5027/tcp| TRACCAR
+
+    DEV_UDP -->|UDP 64501| PLAYIT
+    PLAYIT -->|Proxy UDP| PLY_SVC
+    PLY_SVC -->|127.0.0.1:5027/udp| TRACCAR
+
+    %% Procesamiento y Persistencia
+    TRACCAR -->|Persistencia H2| DATA_TR
+    API -->|Polling cada 5s: http://traccar:8082| TRACCAR
+    API -->|Guarda telemetría y horómetros| DB
+    DB -->|Escritura física| DATA_PG
+
+    %% Acceso Dashboard Web
+    CLIENT -->|HTTPS SSL| ZROK_CLOUD
+    ZROK_CLOUD -->|Túnel Ziti v2| ZROK_CONT
+    ZROK_CONT -->|HTTP 80| WEB
+    WEB -->|Proxy API 8000| API
+
+    %% Acceso Administrador (Traccar & SSH)
+    ADMIN -->|LAN: http://172.16.22.2:8082| TRACCAR
+    ADMIN -->|Túnel SSH: -L 8082:localhost:8082| OS
 ```
-┌─────────────────────────────────┐
-│       Cualquier PC / Laptop     │
-│  • Antigravity IDE              │
-│  • Desarrollo de funcionalidades│
-└───────────────┬─────────────────┘
-                │
-                │ 1. git push origin main
-                ▼
-┌─────────────────────────────────┐
-│         GitHub (Cloud)          │
-│   fbrashich/tk_solucion1_demo1  │
-└───────────────┬─────────────────┘
-                │
-                │ 2. Detección automática (Timer cada 2 min o Webhook)
-                ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      RASPBERRY PI 4B (SRVIOT01)                        │
-├───────────────────────────────────┬────────────────────────────────────┤
-│ MicroSD 8 GB (Solo Boot y OS Base)│ SSD 120 GB USB 3.0 (/mnt/ssd)      │
-├───────────────────────────────────┼────────────────────────────────────┤
-│ • Raspberry Pi OS Lite (64-bit)   │ • Repo: /mnt/ssd/tokioba-iot       │
-│ • Swap de MicroSD: PURGADO        │ • Docker Root: /mnt/ssd/docker     │
-│ • ZRAM: 450 MB comprimidos en RAM │ • PostgreSQL: /mnt/ssd/tokioba-... │
-│ • Logs en RAM (volátiles)         │ • Swap Respaldo: 1 GB en SSD       │
-│ • Cero escrituras de desgaste     │ • Auto-Deploy: Script deploy.sh    │
-└───────────────────────────────────┴────────────────────────────────────┘
-                                    │
-                                    │ 3. Expuesto a Internet
-                                    ▼
-       ┌────────────────────────────┴───────────────────────────┐
-       │ • Dashboard Web (HTTP): ZROK (public:iot-web-portal)   │
-       │ • GPS Teltonika (TCP): practically-doing.tun.ply.gg:60715 │
-       └────────────────────────────────────────────────────────┘
-```
+
+### 1.2 Resumen de Componentes y Puertos del Despliegue
+
+| Componente | Rol en la Arquitectura | Dirección / Puerto Externo | Destino en la Raspberry Pi |
+| :--- | :--- | :--- | :--- |
+| **Ingesta TCP Teltonika** | Portmap.io over OpenVPN | **`193.161.193.99:53772`** | `0.0.0.0:5027/tcp` $\rightarrow$ `telemetry_traccar` |
+| **Ingesta UDP Teltonika** | Playit.gg Anycast Tunnel | **`147.185.221.214:64501`** | `0.0.0.0:5027/udp` $\rightarrow$ `telemetry_traccar` |
+| **Dashboard Web Clientes** | ZROK v2 Public Share | **`https://iot-web-portal.shares.zrok.io`** | `telemetry_web:80` (Nginx + Frontend) |
+| **Consola Web Traccar** | Panel Administrativo | `http://172.16.22.2:8082` (LAN) o Túnel SSH | `telemetry_traccar:8082` |
+| **API Backend Tokioba** | FastAPI REST & Sync | Interno Docker (`http://api:8000`) | `telemetry_api:8000` |
+| **Base de Datos Principal** | Persistencia PostgreSQL | Interno Docker (`db:5432`) | `telemetry_db` $\rightarrow$ `/mnt/ssd/tokioba-iot/data/postgres` |
+| **Base de Datos Traccar** | Almacenamiento Embebido | Local H2 | `telemetry_traccar` $\rightarrow$ `/mnt/ssd/tokioba-iot/data/traccar/data` |
+| **Gestión Remota SSH** | Administración de Sistema | `172.16.22.2:22` (LAN) | `sshd` (Usuario `iot_admin_srv`) |
 
 ---
 
@@ -801,6 +853,57 @@ Traccar corre con imagen oficial ARM64 `traccar/traccar:alpine` con límites aco
 
 #### 4. Auto-Inicialización y Sincronizador Bidireccional (`traccar_sync.py`)
 El servicio backend en FastAPI detecta automáticamente si Traccar es nuevo (`newServer: true`), crea el usuario administrador (`admin@tokioba.com` / `tokioba_admin_2026`) sin intervención manual, registra en Traccar los dispositivos existentes en PostgreSQL y actualiza las tablas `telemetry_events` y `device_states` cada 5 segundos.
+
+---
+
+### 13.6 Acceso y Administración Remota de la Consola Web de Traccar
+
+El contenedor Traccar expone su consola web administrativa y API REST nativa en el puerto **`8082`**. Para acceder a ella desde una PC remota, cuentas con tres métodos según tu ubicación de red:
+
+#### Credenciales Maestras de Acceso
+* **URL:** `http://<IP_O_HOSTNAME_RASPBERRY>:8082`
+* **Email / Usuario:** `admin@tokioba.com`
+* **Contraseña:** `tokioba_admin_2026`
+
+---
+
+#### Método 1: Acceso Directo en Red Local (LAN / Wi-Fi / VPN) — *Recomendado para Taller y Oficina*
+Si tu PC o Laptop se encuentra en la misma red local (conectada por cable o Wi-Fi) o estás conectado mediante una VPN corporativa:
+1. Abre tu navegador web habitual (Chrome, Edge, Firefox, Safari).
+2. Ingresa a cualquiera de las siguientes URLs:
+   ```
+   http://172.16.22.2:8082
+   ```
+   *(o por mDNS si tu red lo resuelve: `http://SRVIOT01.local:8082`)*
+3. Inicia sesión con el usuario `admin@tokioba.com` y la clave `tokioba_admin_2026`.
+*Desde este panel podrás visualizar los dispositivos en el mapa nativo de Traccar, auditar el log crudo de tramas hexadecimales de Teltonika y administrar los parámetros del servidor.*
+
+---
+
+#### Método 2: Túnel Seguro SSH (Port Forwarding) — *Acceso Remoto Seguro desde Cualquier Red Externa*
+Si estás fuera de la oficina/taller o en una conexión remota y no deseas exponer el puerto de Traccar a Internet:
+1. Desde tu PC remota (PowerShell en Windows o Terminal en Linux/Mac), abre un túnel SSH seguro reenviando el puerto 8082 local al puerto 8082 de la Raspberry Pi:
+   ```powershell
+   ssh -L 8082:localhost:8082 iot_admin_srv@172.16.22.2
+   ```
+   *(Si accedes desde una IP pública de router con puerto SSH redirigido o DDNS, reemplaza `172.16.22.2` por tu host externo).*
+2. Mantén esa ventana de terminal abierta.
+3. Abre tu navegador en tu propia PC e ingresa a:
+   ```
+   http://localhost:8082
+   ```
+4. Todo el tráfico viajará encapsulado y cifrado por SSH de extremo a extremo sin abrir puertos adicionales en tu router.
+
+---
+
+#### Método 3: Publicación Mundial Permanente mediante ZROK (Túnel HTTPS con SSL)
+Si requieres acceso permanente desde cualquier lugar del mundo sin configurar SSH ni VPN:
+1. Puedes compartir el puerto `8082` con un nombre reservado en tu cuenta Zrok:
+   ```bash
+   # En la Raspberry Pi:
+   docker compose -f /mnt/ssd/tokioba-iot/docker-compose.pi.yml run --rm zrok share public http://traccar:8082 -n public:traccar-admin --headless
+   ```
+2. O bien configurar un bloque `location /traccar/` dentro del archivo `nginx.conf` de `telemetry_web` para acceder directamente como subruta del dashboard ya publicado: `https://iot-web-portal.shares.zrok.io/traccar/`.
 
 ---
 
