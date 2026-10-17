@@ -42,7 +42,7 @@ graph TD
 
 #### 1.1 Ingesta Telemática Directa en Backend / Traccar Local
 * **Topología de Red Validada:**
-  * **Túnel TCP Teltonika (Portmap.io OpenVPN):** `federicobrashich-51447.portmap.host:51447` $\rightarrow$ `127.0.0.1:5027` (Pi).
+  * **Túnel TCP Teltonika (Portmap.io OpenVPN):** `federicobrashich-53772.portmap.host:53772` $\rightarrow$ `127.0.0.1:5027` (Pi).
   * **Túnel UDP Teltonika (Playit.gg):** `practically-containers.tun.ply.gg:64501` $\rightarrow$ `127.0.0.1:5027` (Pi).
   * **Túnel Web Dashboard (Zrok):** `https://iot-web-portal.shares.zrok.io` $\rightarrow$ `web:80` (Dashboard).
 * **Estrategia de Ingesta:** Recepción en puerto 5027 mediante Traccar Headless ultraliviano en Docker (`-Xmx180m`) o Listener nativo Python Teltonika (Codec 8) integrado en FastAPI.

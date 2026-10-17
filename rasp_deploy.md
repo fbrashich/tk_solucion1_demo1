@@ -542,9 +542,9 @@ Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/ofi
 
 Implementamos un túnel TCP nativo sobre **OpenVPN** mediante el servicio **Portmap.io**, probado y verificado exitosamente desde un teléfono móvil sobre red celular 4G:
 
-* **Host / Dominio de Entrada:** `federicobrashich-51447.portmap.host`
+* **Host / Dominio de Entrada:** `federicobrashich-53772.portmap.host`
 * **IP Pública de Entrada:** `193.161.193.99`
-* **Puerto Público Externo:** **`51447`** *(TCP)*
+* **Puerto Público Externo:** **`53772`** *(TCP)*
 * **Destino Local en la Raspberry Pi:** Puerto **`5027`** *(TCP)*
 * **Interfaz Virtual en la Pi:** `tun0` (IP de túnel `10.9.0.x`)
 * **Archivo de Configuración:** `federico_brashich.iot-tpc-demo.ovpn` (incluido en la raíz del repositorio)
@@ -576,8 +576,8 @@ Implementamos un túnel TCP nativo sobre **OpenVPN** mediante el servicio **Port
    *(El log confirmará `Initialization Sequence Completed` y la creación de `tun0`).*
 
 5. **Configuración en los Rastreadores Teltonika (FMC920 / FMB920 por SMS o Teltonika Configurator):**
-   * **Target Server Domain:** `federicobrashich-51447.portmap.host` *(o IP `193.161.193.99`)*
-   * **Target Server Port:** **`51447`**
+   * **Target Server Domain:** `federicobrashich-53772.portmap.host` *(o IP `193.161.193.99`)*
+   * **Target Server Port:** **`53772`**
    * **Protocol:** **`TCP`**
 
 ---
