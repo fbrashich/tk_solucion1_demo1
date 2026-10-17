@@ -532,12 +532,57 @@ Ahora tu flujo de trabajo como desarrollador es 100% libre:
 ## 13. PASO 11: Exposición Externa Híbrida: Teltonika GPS (TCP Playit) + Web Dashboard (HTTP ZROK)
 
 Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/oficina, implementamos una solución híbrida especializada:
-1. **Tráfico TCP (Rastreadores GPS Teltonika):** Vía **Playit.gg**, que soporta conexiones brutas de Capa 4 requeridas por el firmware de los dispositivos.
-2. **Tráfico HTTP (Dashboard Web):** Vía **ZROK**, recuperando exactamente la misma configuración y dominio persistente que ya funcionaba en el Docker de la PC.
+1. **Tráfico TCP (Rastreadores GPS Teltonika):** Vía **Portmap.io (OpenVPN)**, túnel estándar de Capa 4 validado desde red celular 4G real, con IP/Host dedicado y reconexión automática por systemd.
+2. **Tráfico UDP (Rastreadores GPS Teltonika):** Vía **Playit.gg**, como alternativa de alta eficiencia para telemetría ligera.
+3. **Tráfico HTTP (Dashboard Web):** Vía **ZROK en Docker**, con SSL automático y URL fija reservada (`https://iot-web-portal.shares.zrok.io`).
 
 ---
 
-### 13.1 Solución UDP / TCP para Rastreadores GPS Teltonika (Playit.gg)
+### 13.1 Solución TCP Definitiva para Rastreadores GPS Teltonika (Portmap.io OpenVPN)
+
+Implementamos un túnel TCP nativo sobre **OpenVPN** mediante el servicio **Portmap.io**, probado y verificado exitosamente desde un teléfono móvil sobre red celular 4G:
+
+* **Host / Dominio de Entrada:** `federicobrashich-51447.portmap.host`
+* **IP Pública de Entrada:** `193.161.193.99`
+* **Puerto Público Externo:** **`51447`** *(TCP)*
+* **Destino Local en la Raspberry Pi:** Puerto **`5027`** *(TCP)*
+* **Interfaz Virtual en la Pi:** `tun0` (IP de túnel `10.9.0.x`)
+* **Archivo de Configuración:** `federico_brashich.iot-tpc-demo.ovpn` (incluido en la raíz del repositorio)
+
+#### Pasos de Instalación y Activación en la Raspberry Pi:
+1. **Actualizar el repositorio en la Pi:**
+   ```bash
+   cd /mnt/ssd/tokioba-iot
+   git pull origin main
+   ```
+
+2. **Instalar OpenVPN:**
+   ```bash
+   sudo apt update && sudo apt install -y openvpn
+   ```
+
+3. **Copiar la configuración y activar el servicio persistente:**
+   ```bash
+   sudo mkdir -p /etc/openvpn/client
+   sudo cp /mnt/ssd/tokioba-iot/federico_brashich.iot-tpc-demo.ovpn /etc/openvpn/client/portmap.conf
+   sudo systemctl enable --now openvpn-client@portmap
+   ```
+
+4. **Verificar estado del túnel y la interfaz de red:**
+   ```bash
+   sudo systemctl status openvpn-client@portmap
+   ip a show tun0
+   ```
+   *(El log confirmará `Initialization Sequence Completed` y la creación de `tun0`).*
+
+5. **Configuración en los Rastreadores Teltonika (FMC920 / FMB920 por SMS o Teltonika Configurator):**
+   * **Target Server Domain:** `federicobrashich-51447.portmap.host` *(o IP `193.161.193.99`)*
+   * **Target Server Port:** **`51447`**
+   * **Protocol:** **`TCP`**
+
+---
+
+### 13.2 Solución UDP para Rastreadores GPS Teltonika (Playit.gg)
 
 Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignados y **validados bidireccionalmente con éxito**:
 
@@ -610,7 +655,7 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros asignado
 
 ---
 
-### 13.2 Solución HTTP para el Web Dashboard (ZROK en Docker)
+### 13.3 Solución HTTP para el Web Dashboard (ZROK en Docker)
 
 Recuperamos la configuración de **ZROK** probada en la PC (`openziti/zrok2:latest`), logrando una URL pública con SSL automático y reservada bajo el alias `public:iot-web-portal`.
 
