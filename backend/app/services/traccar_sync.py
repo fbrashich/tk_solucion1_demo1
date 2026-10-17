@@ -97,8 +97,7 @@ class TraccarSynchronizer:
                     json_data={
                         "name": "Administrador Tokioba",
                         "email": TRACCAR_EMAIL,
-                        "password": TRACCAR_PASSWORD,
-                        "administrator": True
+                        "password": TRACCAR_PASSWORD
                     }
                 )
             reg_status, reg_body = await asyncio.to_thread(create_admin)
