@@ -42,7 +42,7 @@ Esta guía detalla la implementación completa para la plataforma telemática **
                                     ▼
        ┌────────────────────────────┴───────────────────────────┐
        │ • Dashboard Web (HTTP): ZROK (public:iot-web-portal)   │
-       │ • GPS Teltonika (TCP): practically-doing.tun.ply.gg:.. │
+       │ • GPS Teltonika (TCP): practically-doing.tun.ply.gg:60715 │
        └────────────────────────────────────────────────────────┘
 ```
 
@@ -539,12 +539,13 @@ Para exponer la plataforma al mundo sin abrir puertos en el router hogareño/ofi
 
 ### 13.1 Solución TCP para Rastreadores GPS Teltonika (Playit.gg)
 
-Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos asignados:
+Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos asignados y validados:
 
 * **Túnel:** `iot-tokioba`
 * **Dominio asignado:** `practically-doing.tun.ply.gg`
-* **Local IP:** `127.0.0.1`
-* **Local Port:** `5027`
+* **IP Pública de entrada:** `147.185.221.216`
+* **Puerto Público Externo:** **`60715`** *(asignado por Playit)*
+* **Destino Local en la Pi:** `127.0.0.1:5027`
 * **Proxy Protocol:** `None`
 
 #### Pasos en la Raspberry Pi:
@@ -556,25 +557,33 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos 
    sudo apt install -y playit
    ```
 
-2. **Iniciar Playit y confirmar vinculación:**
+2. **Requisito Crítico: Sincronización Horaria NTP (Imprescindible en Raspberry Pi):**
+   > [!IMPORTANT]
+   > La Raspberry Pi no tiene pila de reloj (RTC). Si la hora se desfasa por más de 10 segundos, los servidores de Playit rechazan la autenticación con error `RegisterUnauthorized`. Configura la zona horaria y activa la sincronización por red:
    ```bash
-   playit
+   sudo timedatectl set-timezone America/Argentina/Buenos_Aires
+   sudo timedatectl set-ntp true
+   sudo systemctl restart systemd-timesyncd
+   timedatectl
    ```
-   * Sigue el enlace que aparece en la terminal para confirmar la sesión con tu cuenta.
-   * En el panel web de Playit, confirma que el túnel **`iot-tokioba`** esté activo con:
-     * **Host:** `practically-doing.tun.ply.gg`
-     * **Local address:** `127.0.0.1:5027`
-     * **Proxy Protocol:** `None`
 
 3. **Habilitar Playit como servicio del sistema en segundo plano:**
    ```bash
    sudo systemctl enable --now playit
+   sudo systemctl status playit
    ```
 
 4. **Configuración en los Rastreadores Teltonika (Teltonika Configurator / SMS):**
-   * **Target Server Domain:** `practically-doing.tun.ply.gg`
-   * **Target Server Port:** *(El puerto público exterior asignado por Playit en tu panel, ej. 34521)*
+   * **Target Server Domain:** `practically-doing.tun.ply.gg` *(o IP `147.185.221.216`)*
+   * **Target Server Port:** **`60715`**
    * **Protocol:** `TCP`
+
+5. **Validar la Conexión TCP desde tu PC (PowerShell):**
+   Para comprobar que el túnel está respondiendo y reenviando al puerto 5027 de la Pi:
+   ```powershell
+   Test-NetConnection -ComputerName practically-doing.tun.ply.gg -Port 60715
+   ```
+   *(Retorna `TcpTestSucceeded : True` confirmando enlace activo).*
 
 ---
 
