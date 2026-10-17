@@ -567,7 +567,24 @@ Configuramos el agente de Playit en la Raspberry Pi con los parámetros exactos 
    timedatectl
    ```
 
-3. **Habilitar Playit como servicio del sistema en segundo plano:**
+3. **Requisito de Conectividad: Desactivar IPv6 (Evita bucles de reconexión y timeouts en Playit):**
+   > [!WARNING]
+   > En conexiones residenciales y móviles, los routers asignan direcciones IPv6 locales pero carecen de enrutamiento IPv6 global funcional hacia la nube. Como el agente de Playit prioriza IPv6 (`[2602:fbaf:...]`), las peticiones a la API y el ping UDP de control caen en *timeout* (`timeout waiting for pong`, `failed to reload_control_addr`, `code: 110 TimedOut`) provocando reconexiones continuas. Para forzar tráfico puro por IPv4:
+   ```bash
+   # 1. Desactivar IPv6 a nivel del sistema operativo:
+   sudo tee /etc/sysctl.d/99-disable-ipv6.conf <<EOF
+   net.ipv6.conf.all.disable_ipv6 = 1
+   net.ipv6.conf.default.disable_ipv6 = 1
+   net.ipv6.conf.lo.disable_ipv6 = 1
+   EOF
+   sudo sysctl --system
+
+   # 2. Reiniciar el agente de Playit:
+   sudo systemctl restart playit
+   ```
+   *(Opcional en el panel web de Playit.gg -> Agents -> Tu Agente -> Configuración -> Seleccionar "Only IPv4").*
+
+4. **Habilitar Playit como servicio del sistema en segundo plano:**
    ```bash
    sudo systemctl enable --now playit
    sudo systemctl status playit
