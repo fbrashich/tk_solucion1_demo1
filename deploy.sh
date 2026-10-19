@@ -15,9 +15,10 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     # 1. Traer los cambios limpios
     git reset --hard origin/main
     
-    # 2. Reconstruir secuencialmente (api primero, luego web) para proteger la RAM
+    # 2. Reconstruir secuencialmente (api primero, luego web, luego gateway) para proteger la RAM
     docker compose -f docker-compose.pi.yml build api
     docker compose -f docker-compose.pi.yml build web
+    docker compose -f docker-compose.pi.yml build gateway
     docker compose -f docker-compose.pi.yml up -d
     
     # 3. Limpiar imágenes viejas de Docker para no acumular espacio

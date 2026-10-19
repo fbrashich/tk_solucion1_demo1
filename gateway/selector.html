@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selector de Plataforma | Tokioba IoT Gateway</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 1.5rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Glow Background */
+        .ambient-glow {
+            position: absolute;
+            top: -20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 800px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(14, 165, 233, 0.15) 0%, rgba(99, 102, 241, 0.08) 40%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        /* Brand & Status Pill */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 9999px;
+            padding: 0.35rem 0.85rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #38bdf8;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.15); }
+        }
+
+        .main-title {
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.75rem;
+            line-height: 1.2;
+        }
+
+        @media (min-width: 640px) {
+            .main-title {
+                font-size: 2.75rem;
+            }
+        }
+
+        .main-subtitle {
+            font-size: 1rem;
+            color: #94a3b8;
+            max-width: 580px;
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        @media (min-width: 720px) {
+            .cards-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .card {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 1.25rem;
+            padding: 2rem;
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+
+        .card-custom::before {
+            background: linear-gradient(90deg, #06b6d4, #3b82f6);
+        }
+
+        .card-traccar::before {
+            background: linear-gradient(90deg, #8b5cf6, #ec4899);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: #475569;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+        }
+
+        .card-custom:hover {
+            border-color: rgba(6, 182, 212, 0.5);
+            background: linear-gradient(180deg, #1e293b 0%, #1e293b 85%, rgba(6, 182, 212, 0.08) 100%);
+        }
+
+        .card-custom:hover::before {
+            opacity: 1;
+        }
+
+        .card-traccar:hover {
+            border-color: rgba(139, 92, 246, 0.5);
+            background: linear-gradient(180deg, #1e293b 0%, #1e293b 85%, rgba(139, 92, 246, 0.08) 100%);
+        }
+
+        .card-traccar:hover::before {
+            opacity: 1;
+        }
+
+        /* Card Icons */
+        .icon-wrapper {
+            width: 52px;
+            height: 52px;
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .icon-custom {
+            background: rgba(6, 182, 212, 0.15);
+            border-color: rgba(6, 182, 212, 0.3);
+            color: #22d3ee;
+        }
+
+        .icon-traccar {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: rgba(139, 92, 246, 0.3);
+            color: #a78bfa;
+        }
+
+        .card-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 6px;
+            margin-bottom: 0.75rem;
+        }
+
+        .badge-custom {
+            background: rgba(6, 182, 212, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(6, 182, 212, 0.25);
+        }
+
+        .badge-traccar {
+            background: rgba(139, 92, 246, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.25);
+        }
+
+        .card-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-desc {
+            font-size: 0.875rem;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+            flex-grow: 1;
+        }
+
+        .features-list {
+            list-style: none;
+            width: 100%;
+            margin-bottom: 1.5rem;
+            border-top: 1px solid rgba(51, 65, 85, 0.6);
+            padding-top: 1rem;
+        }
+
+        .feature-item {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .feature-item svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            color: #10b981;
+        }
+
+        .btn-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-custom {
+            background: rgba(6, 182, 212, 0.2);
+            color: #38bdf8;
+            border: 1px solid rgba(6, 182, 212, 0.4);
+        }
+
+        .card-custom:hover .btn-custom {
+            background: #0284c7;
+            color: #ffffff;
+            border-color: #0284c7;
+        }
+
+        .btn-traccar {
+            background: rgba(139, 92, 246, 0.2);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+        }
+
+        .card-traccar:hover .btn-traccar {
+            background: #7c3aed;
+            color: #ffffff;
+            border-color: #7c3aed;
+        }
+
+        /* Footer */
+        .footer-note {
+            margin-top: 2.5rem;
+            font-size: 0.8rem;
+            color: #64748b;
+            max-width: 540px;
+            line-height: 1.5;
+        }
+
+        .footer-note code {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-glow"></div>
+
+    <main class="container">
+        <!-- Status Indicator -->
+        <div class="status-badge">
+            <span class="status-dot"></span>
+            <span>Gateway Activo • Puerto 80</span>
+        </div>
+
+        <!-- Main Heading -->
+        <h1 class="main-title">Tokioba IoT Gateway</h1>
+        <p class="main-subtitle">
+            Selecciona la plataforma a la que deseas acceder. Tu preferencia quedará guardada de manera segura para tus próximas peticiones.
+        </p>
+
+        <!-- Two Selection Cards -->
+        <div class="cards-grid">
+            
+            <!-- Option 1: Custom IoT Platform -->
+            <a href="/set-platform/custom" class="card card-custom" id="btn-platform-custom">
+                <div class="icon-wrapper icon-custom">🚀</div>
+                <span class="card-badge badge-custom">Interno: Puerto 8081</span>
+                <h2 class="card-title">Mi Plataforma IoT</h2>
+                <p class="card-desc">
+                    Dashboard visual Tokioba con monitoreo de flota en tiempo real, mapas satelitales, estado de ignición y horómetros acumulados.
+                </p>
+                <ul class="features-list">
+                    <li class="feature-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Interfaz React + FastAPI
+                    </li>
+                    <li class="feature-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Cálculo automático de horómetros
+                    </li>
+                    <li class="feature-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Exportación a Excel / CSV
+                    </li>
+                </ul>
+                <div class="btn-action btn-custom">
+                    <span>Ingresar a Plataforma</span>
+                    <span>&rarr;</span>
+                </div>
+            </a>
+
+            <!-- Option 2: Traccar Web Console -->
+            <a href="/set-platform/traccar" class="card card-traccar" id="btn-platform-traccar">
+                <div class="icon-wrapper icon-traccar">🛰️</div>
+                <span class="card-badge badge-traccar">Interno: Puerto 8082</span>
+                <h2 class="card-title">Consola Traccar</h2>
+                <p class="card-desc">
+                    Consola administrativa nativa de Traccar para depuración telemática profunda, inspección de protocolos y tramas de dispositivos.
+                </p>
+                <ul class="features-list">
+                    <li class="feature-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        WebSockets en tiempo real (/api/socket)
+                    </li>
+                    <li class="feature-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Gestión Teltonika FMC/FMB920
+                    </li>
+                    <li class="feature-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Logs telemáticos en vivo
+                    </li>
+                </ul>
+                <div class="btn-action btn-traccar">
+                    <span>Ingresar a Traccar</span>
+                    <span>&rarr;</span>
+                </div>
+            </a>
+
+        </div>
+
+        <!-- Footer -->
+        <p class="footer-note">
+            La plataforma seleccionada se almacena en la cookie <code>iot_target</code>. Puedes volver a este selector en cualquier momento navegando a <code>/selector</code>.
+        </p>
+    </main>
+
+</body>
+</html>

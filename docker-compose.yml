@@ -36,26 +36,50 @@ services:
     ports:
       - "8000:8000"
 
+  traccar:
+    image: traccar/traccar:alpine
+    container_name: telemetry_traccar
+    restart: always
+    ports:
+      - "5027:5027/tcp"
+      - "5027:5027/udp"
+    expose:
+      - "8082"
+    volumes:
+      - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+
   web:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: telemetry_web
     restart: always
+    expose:
+      - "8081"
     depends_on:
       - api
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: telemetry_gateway
+    restart: always
     ports:
-      - "3000:80"
+      - "80:80"
+    depends_on:
+      - web
+      - traccar
 
   zrok:
     image: openziti/zrok2:latest
     container_name: telemetry_zrok
     restart: always
     depends_on:
-      - web
+      - gateway
     volumes:
       - ${USERPROFILE:-$HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:tk-iot-demo --headless
+    command: share public http://gateway:80 -n public:tk-iot-demo --headless
 
 volumes:
   postgres_data:

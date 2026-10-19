@@ -36,7 +36,8 @@ services:
       # Puerto 5027 mapeado tanto TCP (Portmap.io) como UDP (Playit.gg)
       - "5027:5027/tcp"
       - "5027:5027/udp"
-      - "8082:8082"
+    expose:
+      - "8082"
     volumes:
       - /mnt/ssd/tokioba-iot/traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
       - /mnt/ssd/tokioba-iot/data/traccar/logs:/opt/traccar/logs
@@ -85,15 +86,15 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Servidor Web Nginx (Compila frontend automáticamente dentro de Docker)
+  # Servidor Web Nginx (Compila frontend automáticamente dentro de Docker, escucha interno en 8081)
   web:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: telemetry_web
     restart: unless-stopped
-    ports:
-      - "3000:80"
+    expose:
+      - "8081"
     depends_on:
       - api
     deploy:
@@ -106,7 +107,29 @@ services:
         max-size: "5m"
         max-file: "2"
 
-  # Túnel Público Seguro para el Dashboard Web (ZROK)
+  # Gateway Router Nginx (Único servicio expuesto en puerto 80 con Selector Visual y Enrutamiento por Cookie)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: telemetry_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - web
+      - traccar
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # Túnel Público Seguro para el Gateway Web (ZROK)
   zrok:
     image: openziti/zrok2:latest
     container_name: telemetry_zrok
@@ -114,10 +137,10 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 20s
     depends_on:
-      - web
+      - gateway
     volumes:
       - ${HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:iot-web-portal --headless
+    command: share public http://gateway:80 -n public:iot-web-portal --headless
     deploy:
       resources:
         limits:

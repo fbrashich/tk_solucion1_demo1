@@ -3,7 +3,7 @@ import {
   Users, Shield, UserPlus, LogOut, RefreshCw, 
   Trash2, ToggleLeft, ToggleRight, CheckCircle2, 
   AlertCircle, Cpu, Search, Check, X, Key,
-  Layers, HardDrive, ShieldAlert
+  Layers, HardDrive, ShieldAlert, Satellite
 } from 'lucide-react';
 import { 
   getAdminUsers, 
@@ -192,6 +192,16 @@ export default function AdminDashboard() {
               <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refrescar</span>
             </button>
+
+            {/* Acceso Rápido a Traccar / Selector */}
+            <a
+              href="/selector"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 border border-purple-500/30 text-xs font-bold text-purple-300 transition-all cursor-pointer"
+              title="Cambiar a Consola Traccar o Selector de Plataformas"
+            >
+              <Satellite className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Traccar</span>
+            </a>
 
             <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
               <div className="flex flex-col text-right hidden sm:block">

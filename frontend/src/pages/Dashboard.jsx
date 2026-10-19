@@ -494,6 +494,16 @@ export default function Dashboard() {
               <span className="hidden md:inline">Sync ({countdown}s)</span>
             </button>
 
+            {/* Acceso Rápido a Traccar / Selector */}
+            <a
+              href="/selector"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 border border-purple-500/30 text-xs font-bold text-purple-300 transition-all cursor-pointer"
+              title="Cambiar a Consola Traccar o Selector de Plataformas"
+            >
+              <Satellite className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Traccar</span>
+            </a>
+
             {/* Usuario / Salir */}
             <div className="flex items-center gap-1.5 pl-1 border-l border-slate-800">
               <span className="text-xs text-slate-400 font-medium hidden lg:inline px-1">

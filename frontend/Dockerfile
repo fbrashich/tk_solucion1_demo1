@@ -25,7 +25,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Crear o copiar la configuración de nginx si fuera necesario para react router
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Exponer puerto 80
-EXPOSE 80
+# Exponer puerto 8081
+EXPOSE 8081
 
 CMD ["nginx", "-g", "daemon off;"]
