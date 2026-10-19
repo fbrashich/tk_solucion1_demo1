@@ -91,8 +91,10 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | **Ingesta TCP Teltonika** | Portmap.io over OpenVPN | **`193.161.193.99:53772`** | `0.0.0.0:5027/tcp` $\rightarrow$ `telemetry_traccar` |
 | **Ingesta UDP Teltonika** | Playit.gg Anycast Tunnel | **`147.185.221.214:64501`** | `0.0.0.0:5027/udp` $\rightarrow$ `telemetry_traccar` |
-| **Dashboard Web Clientes** | ZROK v2 Public Share | **`https://iot-web-portal.shares.zrok.io`** | `telemetry_web:80` (Nginx + Frontend) |
-| **Consola Web Traccar** | Panel Administrativo | `http://172.16.22.2:8082` (LAN) o Túnel SSH | `telemetry_traccar:8082` |
+| **Gateway Router Nginx** | Único Puerto Web Expuesto (Selector & Router) | **`http://172.16.22.2:80`** (LAN) / ZROK | `0.0.0.0:80->80` $\rightarrow$ `telemetry_gateway` |
+| **Dashboard Web Clientes** | ZROK v2 Public Share | **`https://iot-web-portal.shares.zrok.io`** | `telemetry_gateway:80` |
+| **Plataforma Propia IoT** | Dashboard React + Proxy FastAPI | Enrutado por cookie (`iot_target=custom`) | Interno Docker (`telemetry_web:8081`) |
+| **Consola Web Traccar** | Panel Administrativo Traccar | Enrutado por cookie (`iot_target=traccar`) | Interno Docker (`telemetry_traccar:8082`) |
 | **API Backend Tokioba** | FastAPI REST & Sync | Interno Docker (`http://api:8000`) | `telemetry_api:8000` |
 | **Base de Datos Principal** | Persistencia PostgreSQL | Interno Docker (`db:5432`) | `telemetry_db` $\rightarrow$ `/mnt/ssd/tokioba-iot/data/postgres` |
 | **Base de Datos Traccar** | Almacenamiento Embebido | Local H2 | `telemetry_traccar` $\rightarrow$ `/mnt/ssd/tokioba-iot/data/traccar/data` |
