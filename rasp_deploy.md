@@ -40,10 +40,11 @@ graph TD
         end
 
         subgraph DOCKER["Docker Engine (/mnt/ssd/docker)"]
-            TRACCAR["telemetry_traccar<br/>Traccar 6.16 Alpine (-Xmx160m)<br/>Puertos: 5027 TCP/UDP | 8082 HTTP"]
+            GATEWAY["telemetry_gateway<br/>Nginx Gateway Router (Port 80:80)<br/>Selector Visual & Cookie Routing"]
+            WEB["telemetry_web<br/>Nginx Servidor Web (Port 8081 interno)"]
+            TRACCAR["telemetry_traccar<br/>Traccar 6.16 Alpine (-Xmx160m)<br/>Puertos: 5027 TCP/UDP | 8082 interno"]
             API["telemetry_api<br/>FastAPI Tokioba Backend<br/>Worker traccar_sync.py (Polling 5s)"]
             DB[("telemetry_db<br/>PostgreSQL 15 Alpine<br/>telemetry_events & device_states")]
-            WEB["telemetry_web<br/>Nginx Servidor Web (Port 3000:80)"]
             ZROK_CONT["telemetry_zrok<br/>Zrok2 Headless Client (SIGINT)"]
         end
 
@@ -74,15 +75,14 @@ graph TD
     API -->|Guarda telemetría y horómetros| DB
     DB -->|Escritura física| DATA_PG
 
-    %% Acceso Dashboard Web
+    %% Acceso Web Unificado (Gateway Router Puerto 80)
     CLIENT -->|HTTPS SSL| ZROK_CLOUD
     ZROK_CLOUD -->|Túnel Ziti v2| ZROK_CONT
-    ZROK_CONT -->|HTTP 80| WEB
+    ZROK_CONT -->|HTTP 80| GATEWAY
+    ADMIN -->|LAN: http://172.16.22.2:80| GATEWAY
+    GATEWAY -->|Cookie: iot_target=custom| WEB
+    GATEWAY -->|Cookie: iot_target=traccar| TRACCAR
     WEB -->|Proxy API 8000| API
-
-    %% Acceso Administrador (Traccar & SSH)
-    ADMIN -->|LAN: http://172.16.22.2:8082| TRACCAR
-    ADMIN -->|Túnel SSH: -L 8082:localhost:8082| OS
 ```
 
 ### 1.2 Resumen de Componentes y Puertos del Despliegue
@@ -732,10 +732,10 @@ El servicio ya está añadido al Compose y mapea automáticamente tu identidad d
     stop_signal: SIGINT
     stop_grace_period: 20s
     depends_on:
-      - web
+      - gateway
     volumes:
       - ${HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:iot-web-portal --headless
+    command: share public http://gateway:80 -n public:iot-web-portal --headless
     deploy:
       resources:
         limits:
@@ -860,52 +860,92 @@ El servicio backend en FastAPI detecta automáticamente si Traccar es nuevo (`ne
 
 ### 13.6 Acceso y Administración Remota de la Consola Web de Traccar
 
-El contenedor Traccar expone su consola web administrativa y API REST nativa en el puerto **`8082`**. Para acceder a ella desde una PC remota, cuentas con tres métodos según tu ubicación de red:
+El contenedor Traccar procesa la ingesta de telemetría directamente por los puertos 5027 TCP/UDP y expone su consola web administrativa y API REST internamente en el puerto **`8082`**. 
 
-#### Credenciales Maestras de Acceso
-* **URL:** `http://<IP_O_HOSTNAME_RASPBERRY>:8082`
+Gracias a la implementación del **Gateway Router Nginx en el puerto 80**, ya no es necesario lidiar con números de puerto diferentes ni abrir túneles complejos para acceder a Traccar.
+
+#### Credenciales Maestras de Acceso a Traccar
 * **Email / Usuario:** `admin@tokioba.com`
 * **Contraseña:** `tokioba_admin_2026`
 
 ---
 
-#### Método 1: Acceso Directo en Red Local (LAN / Wi-Fi / VPN) — *Recomendado para Taller y Oficina*
-Si tu PC o Laptop se encuentra en la misma red local (conectada por cable o Wi-Fi) o estás conectado mediante una VPN corporativa:
-1. Abre tu navegador web habitual (Chrome, Edge, Firefox, Safari).
-2. Ingresa a cualquiera de las siguientes URLs:
-   ```
-   http://172.16.22.2:8082
-   ```
-   *(o por mDNS si tu red lo resuelve: `http://SRVIOT01.local:8082`)*
-3. Inicia sesión con el usuario `admin@tokioba.com` y la clave `tokioba_admin_2026`.
-*Desde este panel podrás visualizar los dispositivos en el mapa nativo de Traccar, auditar el log crudo de tramas hexadecimales de Teltonika y administrar los parámetros del servidor.*
+#### Método 1: Acceso Directo Unificado en Puerto 80 (LAN o Internet ZROK) — *Método Oficial y Recomendado*
+Puedes ingresar tanto en la red local como desde cualquier parte del mundo mediante el Gateway único:
+
+1. **Desde la Red Local (LAN / Wi-Fi):**
+   * Ingresa a `http://172.16.22.2/selector` (o `http://172.16.22.2/` sin cookies).
+   * Haz clic en **🛰️ Consola Traccar** (o directamente navega a `http://172.16.22.2/set-platform/traccar`).
+   * Tu navegador guardará la cookie `iot_target=traccar` y accederás a la consola web completa de Traccar de inmediato en el puerto 80 estándar.
+
+2. **Desde el Exterior mediante ZROK (HTTPS Seguro con SSL):**
+   * Ingresa a tu URL pública: `https://iot-web-portal.shares.zrok.io/selector`.
+   * Pulsa **🛰️ Consola Traccar** para acceder a Traccar con cifrado SSL sin abrir puertos en el router.
+
+3. **Salto Inmediato con 1 Clic desde Nuestra Plataforma:**
+   * Cuando estés dentro de nuestra plataforma web Tokioba IoT, en la barra superior (navbar) verás el botón **🛰️ Traccar**. Al pulsarlo, el Gateway te redirige automáticamente a la consola de Traccar.
 
 ---
 
-#### Método 2: Túnel Seguro SSH (Port Forwarding) — *Acceso Remoto Seguro desde Cualquier Red Externa*
-Si estás fuera de la oficina/taller o en una conexión remota y no deseas exponer el puerto de Traccar a Internet:
-1. Desde tu PC remota (PowerShell en Windows o Terminal en Linux/Mac), abre un túnel SSH seguro reenviando el puerto 8082 local al puerto 8082 de la Raspberry Pi:
+#### Método 2: Túnel Seguro SSH (Port Forwarding para Consola Interna) — *Fallback Técnico*
+Si necesitas depuración técnica directa al socket interno de Jetty sin pasar por Nginx:
+1. Desde tu PC remota (PowerShell en Windows o Terminal en Linux/Mac), reenvía el puerto 8082 interno de Docker:
    ```powershell
-   ssh -L 8082:localhost:8082 iot_admin_srv@172.16.22.2
+   ssh -i $env:USERPROFILE\.ssh\id_ed25519_tokioba -L 8082:localhost:8082 iot_admin_srv@172.16.22.2
    ```
-   *(Si accedes desde una IP pública de router con puerto SSH redirigido o DDNS, reemplaza `172.16.22.2` por tu host externo).*
-2. Mantén esa ventana de terminal abierta.
-3. Abre tu navegador en tu propia PC e ingresa a:
+2. Mantén esa ventana de terminal abierta e ingresa en tu navegador a:
    ```
    http://localhost:8082
    ```
-4. Todo el tráfico viajará encapsulado y cifrado por SSH de extremo a extremo sin abrir puertos adicionales en tu router.
 
 ---
 
-#### Método 3: Publicación Mundial Permanente mediante ZROK (Túnel HTTPS con SSL)
-Si requieres acceso permanente desde cualquier lugar del mundo sin configurar SSH ni VPN:
-1. Puedes compartir el puerto `8082` con un nombre reservado en tu cuenta Zrok:
-   ```bash
-   # En la Raspberry Pi:
-   docker compose -f /mnt/ssd/tokioba-iot/docker-compose.pi.yml run --rm zrok share public http://traccar:8082 -n public:traccar-admin --headless
-   ```
-2. O bien configurar un bloque `location /traccar/` dentro del archivo `nginx.conf` de `telemetry_web` para acceder directamente como subruta del dashboard ya publicado: `https://iot-web-portal.shares.zrok.io/traccar/`.
+### 13.7 Gateway Router Nginx en Puerto 80 (Selector Visual y Enrutamiento por Cookie)
+
+Para resolver la convivencia de dos aplicaciones Single Page Application (SPA) que utilizan rutas absolutas `/api/...` y WebSockets (`/api/socket`), se implementó un **Gateway Router en el puerto 80** basado en Nginx con enrutamiento total por cookie (`iot_target`).
+
+```text
+                                 ┌──> [iot_target=custom]  ──> Plataforma Tokioba (8081)
+CLIENTE ──> Gateway Nginx (80) ──┤
+                                 └──> [iot_target=traccar] ──> Consola Traccar   (8082)
+                                 └──> [sin cookie]         ──> 302 a /selector
+```
+
+#### 1. Características Técnicas Implementadas:
+* **Resolución DNS Dinámica Docker:** Utiliza `resolver 127.0.0.11 valid=30s ipv6=off;` para resolver en tiempo de ejecución los contenedores `web` y `traccar` sin fallos si se reinician con nuevas IPs internas.
+* **Mapeo por Cookie (`map $cookie_iot_target`):**
+  * `"custom"` $\rightarrow$ enruta el 100% del tráfico al servicio web de Tokioba (`http://web:8081`).
+  * `"traccar"` $\rightarrow$ enruta el 100% del tráfico a Traccar (`http://traccar:8082`).
+  * `default` $\rightarrow$ redirige automáticamente al selector visual (`/selector`).
+* **Soporte Nativo de WebSockets (RFC 6455):** Cabeceras `Upgrade $http_upgrade` y `Connection $connection_upgrade` configuradas con timeouts extendidos (`86400s`) para evitar desconexiones en las alertas y mapas en vivo de Traccar (`/api/socket`).
+* **Prevención Estricta de Caché:** Endpoints de control con cabeceras `Cache-Control: no-store, no-cache, must-revalidate` para que los navegadores nunca almacenen respuestas intermedias.
+
+#### 2. Endpoints del Gateway Router:
+| Endpoint | Método | Función |
+| :--- | :--- | :--- |
+| **`/`** | GET | Router principal. Si no hay cookie fijada, redirige `302 /selector`. Si hay cookie, enruta al upstream correspondiente. |
+| **`/selector`** | GET | Pantalla visual en modo oscuro (`#0b0f19` / `#1e293b`) con botones interactivos para elegir plataforma. |
+| **`/set-platform/custom`** | GET | Fija la cookie `iot_target=custom` (vigencia 24h) y redirige `302 /`. |
+| **`/set-platform/traccar`** | GET | Fija la cookie `iot_target=traccar` (vigencia 24h) y redirige `302 /`. |
+| **`/logout-platform`** | GET | Borra la cookie `iot_target` y redirige `302 /selector` para volver a elegir. |
+
+#### 3. Verificación Rápida de Salud con `curl`:
+```bash
+# 1. Sin cookies debe enviar al selector:
+curl -I http://172.16.22.2:80/
+
+# 2. Selector visual debe responder 200 OK:
+curl -I http://172.16.22.2:80/selector
+
+# 3. Fijar plataforma custom:
+curl -I http://172.16.22.2:80/set-platform/custom
+
+# 4. Consumir con cookie custom (responde React y FastAPI):
+curl -i -b "iot_target=custom" http://172.16.22.2:80/
+
+# 5. Consumir con cookie traccar (responde Traccar):
+curl -i -b "iot_target=traccar" http://172.16.22.2:80/
+```
 
 ---
 
