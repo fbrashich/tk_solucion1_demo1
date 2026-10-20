@@ -67,6 +67,12 @@ async def list_devices(
     if current_user.role == "admin":
         return []
 
+    # Sincronización proactiva con Traccar (con throttle interno en traccar_client)
+    try:
+        await traccar_client.reconcile_devices(db)
+    except Exception as e:
+        logger.warning(f"[DEVICES] Sincronización en list_devices omitida por error: {e}")
+
     # El Operador solo ve de forma PRIVADA y ESTRICTA los dispositivos asociados a su cuenta
     query = select(Device).where(Device.user_id == current_user.id)
     if not include_inactive:
@@ -139,7 +145,8 @@ async def create_device(
                     name=existing_dev.name,
                     model=existing_dev.traccar_model,
                     phone=existing_dev.sim_phone,
-                    category=existing_dev.category
+                    category=existing_dev.category,
+                    owner_email=current_user.username
                 )
             except Exception as e:
                 logger.warning(f"[DEVICES] No se pudo sincronizar alta reclamada con Traccar ({sync_uid}): {e}")
@@ -170,7 +177,8 @@ async def create_device(
             name=device.name,
             model=device.traccar_model,
             phone=device.sim_phone,
-            category=device.category
+            category=device.category,
+            owner_email=current_user.username
         )
     except Exception as e:
         logger.warning(f"[DEVICES] No se pudo sincronizar alta de equipo con Traccar ({sync_uid}): {e}")
@@ -292,6 +300,12 @@ async def get_all_devices_status(
             total_engine_hours=0.0,
             devices=[]
         )
+
+    # Sincronización proactiva con Traccar (con throttle interno en traccar_client)
+    try:
+        await traccar_client.reconcile_devices(db)
+    except Exception as e:
+        logger.warning(f"[DEVICES] Sincronización en /status/all omitida: {e}")
 
     now = datetime.now(timezone.utc)
     
