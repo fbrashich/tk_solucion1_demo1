@@ -21,41 +21,46 @@ Para ejecutar el proyecto, asegúrese de tener Docker y Docker Compose instalado
 docker compose up --build
 ```
 
-### Accesos y Servicios (Tráfico Unificado en Puerto 3000)
-Una vez que los contenedores estén levantados, **todo el tráfico está unificado a través del proxy reverso Nginx en el puerto 3000**, ideal para despliegues con túneles inversos (Zrok, ngrok, Cloudflare Tunnels):
-- **Dashboard Web (SPA Industrial):** [http://localhost:3000](http://localhost:3000)
-- **API Backend (Proxy Reverso):** [http://localhost:3000/api](http://localhost:3000/api)
-- **Documentación Swagger / OpenAPI:** [http://localhost:3000/docs](http://localhost:3000/docs)
-- **Seguridad DB:** La base de datos PostgreSQL **no** expone puertos hacia el host; opera exclusivamente en la red interna de Docker comunicada con el servicio `api`.
+### Arquitectura y Puertos de Servicio (Gateway Router en Puerto 80)
+La plataforma opera con un **Gateway Router Nginx en el puerto 80** que expone una única entrada exterior y permite elegir mediante un selector visual y cookie (`iot_target`) qué consola visualizar:
+- **Selector Visual de Plataformas:** [http://localhost/selector](http://localhost/selector)
+- **Plataforma Propia IoT (React + FastAPI):** Escucha internamente en el puerto `8081` (o vía cookie `iot_target=custom`).
+- **Consola Traccar:** Escucha internamente en el puerto `8082` (o vía cookie `iot_target=traccar`).
+- **Ingesta Telemática Directa (Listener Global Traccar):**
+  - **Puerto 5027 (TCP/UDP):** Decodificador para trackers Teltonika (ATC700, FMC920, FMB920).
+  - **Puerto 5055 (HTTP):** Decodificador para clientes OsmAnd / FindMy.
+- **Backend FastAPI:** Escucha en el puerto `8000` (`http://localhost:8000/api` y `/docs`).
+- **Seguridad DB:** PostgreSQL opera exclusivamente en la red interna de Docker (`telemetry_db:5432`).
 
 ### Credenciales de Acceso
-El script de inicialización crea automáticamente dos cuentas listas para usar:
+El script de inicialización crea automáticamente cuentas listas para usar:
 1. **Super Administrador:**
    - **Usuario:** `admin` | **Contraseña:** `admin123`
-   - *Capacidades:* Control total, acceso al panel de gestión de cuentas (alta/baja de usuarios), alta/baja/modificación de maquinaria y exportación de telemetría.
-2. **Operador Industrial (Aldo):**
-   - **Usuario:** `aldo` | **Contraseña:** `aldo123`
+   - *Capacidades:* Control total, gestión de cuentas de operadores, asignación y exportación de telemetría.
+2. **Operadores Industriales:**
+   - **Usuario:** `fabianb_op` / `aldo` | **Contraseña:** `Password123!`
    - *Capacidades:* Monitoreo en vivo de equipos, mapas de flota, horómetros, registro de eventos y exportación de datos.
 
-### Nuevas Funcionalidades Implementadas
-- **Visualización Multidispositivo en el Mismo Mapa:**
-  - Selector desplegable en la barra superior para alternar entre la vista de **Toda la Flota** o un equipo específico (`MESA_01`, `MESA_02`, `PALA_01`, etc.).
-  - En la vista de flota, el mapa renderiza simultáneamente las balizas de todos los equipos con su color según el estado operativo (`OPERANDO` verde, `DETENIDA` ámbar, `SIN COMUNICACIÓN` rojo).
-- **CRUD de Dispositivos (Alta, Baja y Modificación):**
-  - Registro de nuevos equipos de planta con código de hardware, nombre legible, tipo de maquinaria y sector.
-  - Modificación de metadatos y baja de equipos.
-- **Panel de Super Administrador:**
-  - Ventana modal de administración accesible con un clic para cuentas de rol `admin`.
-  - Permite dar de alta nuevos operadores, suspender/activar cuentas, asignar permisos y resetear accesos.
-- **Exportación de Datos a CSV:**
-  - Descarga instantánea de reportes de telemetría históricos en formato `.csv` con marcas temporales UTC, estados de ignición y coordenadas GPS.
-- **Simulador Multi-Dispositivo:**
-  - `python demo_device.py` transmite en vivo y en paralelo para múltiples máquinas (`MESA_01` y `MESA_02`), permitiendo observar el movimiento sincronizado y el comportamiento en el mapa.
-- **Aislamiento Multi-Tenant Estricto (Privacidad de Clientes):**
-  - Cada dispositivo está asociado a nivel relacional en PostgreSQL a su cuenta de operador (`devices.user_id = users.id`).
-  - Cada operador únicamente tiene visibilidad y acceso a su propia maquinaria y telemetría.
-  - El Super Administrador supervisa cuentas y volumen de equipos sin acceso a la telemetría privada.
-  - Para nuevos operadores sin equipos asignados (ej. `demo1`), la interfaz muestra un espacio inicial con botón de alta.
+### Capacidades y Blindajes Telemáticos
+- **Ingesta Unificada Traccar -> FastAPI (`POST /api/ingest/traccar`):**
+  - Traccar decodifica las tramas de hardware y las reenvía vía HTTP JSON por la red interna de Docker hacia FastAPI.
+  - Cola de reintentos en memoria activa (`forward.retry.enable=true`) para proteger la telemetría ante reinicios o actualizaciones de FastAPI.
+- **Emparejamiento Estricto por IMEI (`uniqueId`):**
+  - Vinculación unívoca por IMEI (ej. ATC700 `860693080022560`), independizándose de IDs autoincrementales internos.
+- **Auto-Discovery:**
+  - Si Traccar recibe datos de un nuevo tracker, FastAPI lo crea automáticamente en PostgreSQL y registra su telemetría al instante.
+- **Blindaje de Ráfagas e Idempotencia:**
+  - Idempotencia por `device_id + fixTime` para evitar paquetes duplicados.
+  - Protección de horas de motor: cálculo estricto de deltas solo cuando `fixTime > last_updated` y la ignición está activa, evitando deltas negativos por paquetes desordenados.
+  - Preservación de la última posición en tiempo real ante ráfagas de memoria históricas.
+- **Decodificación Extendida de IO Elements Teltonika:**
+  - Ignición (`io239`/`io1`), Movimiento (`io240`), Batería del vehículo (`power`/`io66`), Batería interna (`battery`/`io67`), Odómetro (`totalDistance`/`io16`), Satélites (`sat`), Señal GSM (`rssi`) y conversión de velocidad a km/h (`speed * 1.852`).
+  - Guardado íntegro del JSON en `raw_data` con metadata `normalized`.
+- **Sincronización ABM Bidireccional:**
+  - Cualquier alta, modificación o baja de equipo en la plataforma Custom se propaga automáticamente a Traccar vía REST API.
+  - Al iniciar FastAPI (`lifespan`), una rutina en segundo plano reconcilia ambos catálogos.
+- **Suite de Pruebas Automatizadas:**
+  - `python scripts/run_dod_verification.py` valida automáticamente los 4 requerimientos del Definition of Done.
 
 ---
 
