@@ -949,6 +949,44 @@ curl -i -b "iot_target=traccar" http://172.16.22.2:80/
 
 ---
 
+### 13.6 Ingesta Unificada (Traccar -> FastAPI), Sincronización ABM por IMEI y Blindaje Telemático
+
+Arquitectura telemática consolidada donde **Traccar actúa como Listener Global** de los puertos 5027 (Teltonika ATC700, FMC920, FMB920) y 5055 (OsmAnd/FindMy), reenviando todas las posiciones decodificadas por la red interna de Docker hacia FastAPI (`POST http://api:8000/api/ingest/traccar`).
+
+#### 1. Configuración de Reenvío en `traccar/traccar.xml`:
+```xml
+<!-- Ingesta Telemática Unificada: reenvío JSON en tiempo real a FastAPI -->
+<entry key='forward.enable'>true</entry>
+<entry key='forward.url'>http://api:8000/api/ingest/traccar</entry>
+<entry key='forward.type'>json</entry>
+<entry key='forward.retry.enable'>true</entry>
+<entry key='forward.retry.delay'>10</entry>
+```
+
+#### 2. Blindajes Operativos en FastAPI (`POST /api/ingest/traccar`):
+* **Emparejamiento por IMEI (`uniqueId`):** Se busca en la base de datos por `Device.traccar_unique_id == uniqueId` o `Device.device_id == uniqueId`. Nunca se depende de IDs autoincrementales internos de Traccar.
+* **Auto-Discovery:** Si entra una trama de un dispositivo reconocido en Traccar pero que aún no fue creado en PostgreSQL, FastAPI lo crea automáticamente y le asocia la telemetría sin pérdida de datos.
+* **Manejo de Ráfagas e Idempotencia:**
+  * Deduplicación estricta por `device_id + fixTime` (paquetes repetidos son omitidos).
+  * Las horas de motor acumuladas solo suman deltas positivos si `fixTime > last_updated` y la ignición está activa.
+  * Si llegan paquetes desordenados o históricos de la memoria del GPS, se almacenan en `telemetry_events` pero **no** alteran la última posición en tiempo real (`DeviceState.last_updated`) ni generan deltas negativos.
+* **Extracción Extendida Teltonika / IO Elements:**
+  * Velocidad convertida automáticamente de nudos a km/h (`speed * 1.852`).
+  * Extracción de Ignición (`ignition` / `io239` / `io1`), Movimiento (`motion` / `io240`), Batería del vehículo (`power` / `ext_voltage` / `io66`), Batería interna (`battery` / `io67`), Odómetro (`totalDistance` / `io16`), Horómetro (`hours`), Satélites (`sat`) y Señal GSM (`rssi`).
+  * Guardado íntegro en `raw_data` (JSONB) con metadato `normalized` para consumo rápido por frontend.
+
+#### 3. Sincronización Automática ABM y Reconciliación en Startup:
+* **Cliente HTTP Asíncrono (`TraccarClient`):** Conecta a la API REST de Traccar (`http://traccar:8082/api`) con autenticación básica.
+* **Propagación ABM:** Al dar de alta, editar o eliminar un equipo en la plataforma Custom (`/api/devices`), el cambio se refleja automáticamente en Traccar.
+* **Startup Reconciliation (`lifespan`):** Al arrancar FastAPI, una tarea no bloqueante verifica que todos los equipos en Traccar estén en PostgreSQL y viceversa.
+
+#### 4. Ejecución del Test Suite Automatizado:
+```bash
+docker exec -i telemetry_api python /app/scripts/run_dod_verification.py
+```
+
+---
+
 ## 14. Comandos Esenciales de Monitoreo y Mantenimiento
 
 | Acción | Comando en la Raspberry Pi |
