@@ -987,6 +987,33 @@ docker exec -i telemetry_api python /app/scripts/run_dod_verification.py
 
 ---
 
+### 13.7 Selector de Tema (Modo Oscuro / Modo Claro) con Halo Ambiental y Cero Regresión
+
+Implementación de un sistema unificado de conmutación de temas (Dark / Light) con persistencia compartida entre la Plataforma Custom React (Puerto 8081) y el Gateway Nginx (`/selector` en Puerto 80).
+
+#### 1. Regla de Preservación Estricta (No-Regresión):
+* **Modo Oscuro Intacto:** El tema por defecto es `dark`. Todos los estilos existentes (`#0b0f19`, `#1e293b`, acentos cian/esmeralda, sombras y mosaicos invertidos de Leaflet) permanecen 100% inalterados cuando el tema activo es `dark`.
+* **Cero Impacto Lógico:** No se modificaron rutas, endpoints, estructuras de datos ni lógica de negocio.
+
+#### 2. Design Tokens del Modo Claro:
+* **Fondo Canvas / Body:** `#F8FAFC`.
+* **Halo Resplandor Ambiental:** Difuminado azul/índigo suave detrás de tarjetas y login:
+  `background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, rgba(99, 102, 241, 0.14) 45%, rgba(248, 250, 252, 0) 75%); filter: blur(55px);`
+* **Contenedores y Tarjetas:** Superficie blanca `#FFFFFF`, borde `1px solid #E2E8F0`, esquinas redondeadas y sombra `0 10px 30px -5px rgba(15, 23, 42, 0.06), 0 4px 12px -2px rgba(15, 23, 42, 0.04)`.
+* **Tipografía:** Títulos `#0F172A` / `#1E293B`, labels/secundarios `#334155`, textos auxiliares `#64748B`.
+* **Inputs:** Fondo `#FFFFFF`, borde `#CBD5E1`, texto `#0F172A`, placeholder `#94A3B8`. En foco borde `#3B82F6` con halo suave.
+* **Botones:** 
+  * Primario (Submit / Sign In): Sólido negro carbón `#0F172A`, texto `#FFFFFF` en negrita, hover `#1E293B`.
+  * Secundario: Fondo `#FFFFFF`, borde `#E2E8F0`, texto `#1E293B`.
+  * Separador ("O continuar con"): Fondo `#F1F5F9`, borde `#E2E8F0`, texto `#64748B`.
+* **Mosaicos de Mapa (React-Leaflet):** En modo claro utiliza mosaicos limpios sin inversión (CartoDB Positron / OSM estándar); en modo oscuro mantiene la capa `.leaflet-dark-tiles`.
+
+#### 3. Sincronización y Persistencia:
+* **Storage Dual:** Se guarda en `localStorage.getItem('iot_theme')` y en la cookie `iot_theme=light|dark; Path=/; max-age=31536000; SameSite=Lax`.
+* **Conmutación Bidireccional:** El usuario puede alternar el tema tanto desde el Gateway `/selector` como desde el Login o las barras superiores de `Dashboard` y `AdminDashboard`. Al recargar (F5) o navegar entre plataformas, la preferencia se mantiene guardada.
+
+---
+
 ## 14. Comandos Esenciales de Monitoreo y Mantenimiento
 
 | Acción | Comando en la Raspberry Pi |
