@@ -326,9 +326,200 @@
             color: #94a3b8;
             border: 1px solid #334155;
         }
+
+        /* Botón Conmutador de Tema en la esquina superior */
+        .theme-bar {
+            position: absolute;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 50;
+        }
+
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #fcd34d;
+            padding: 0.45rem 0.9rem;
+            border-radius: 0.75rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            user-select: none;
+        }
+
+        .theme-toggle:hover {
+            background: #334155;
+            border-color: #fcd34d;
+        }
+
+        .theme-toggle:active {
+            transform: scale(0.97);
+        }
+
+        /* ==========================================================
+           MODO CLARO (LIGHT THEME) DESIGN TOKENS (body.light)
+           Modo oscuro se preserva 100% idéntico cuando body no tiene .light
+           ========================================================== */
+        body.light {
+            background-color: #F8FAFC;
+            color: #0F172A;
+        }
+
+        body.light .ambient-glow {
+            width: 900px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, rgba(99, 102, 241, 0.14) 45%, rgba(248, 250, 252, 0) 75%);
+            filter: blur(55px);
+            opacity: 1;
+        }
+
+        body.light .theme-toggle {
+            background: #FFFFFF;
+            border-color: #CBD5E1;
+            color: #4F46E5;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        body.light .theme-toggle:hover {
+            background: #F8FAFC;
+            border-color: #4F46E5;
+        }
+
+        body.light .status-badge {
+            background: #FFFFFF;
+            border-color: #E2E8F0;
+            color: #2563EB;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+        }
+
+        body.light .main-title {
+            background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #334155 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        body.light .main-subtitle {
+            color: #64748B;
+        }
+
+        body.light .card {
+            background: #FFFFFF;
+            border-color: #E2E8F0;
+            box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+            color: #0F172A;
+        }
+
+        body.light .card:hover {
+            border-color: #CBD5E1;
+            box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.12);
+            transform: translateY(-4px);
+        }
+
+        body.light .card-custom:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            background: linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 85%, rgba(59, 130, 246, 0.04) 100%);
+        }
+
+        body.light .card-traccar:hover {
+            border-color: rgba(139, 92, 246, 0.5);
+            background: linear-gradient(180deg, #FFFFFF 0%, #FFFFFF 85%, rgba(139, 92, 246, 0.04) 100%);
+        }
+
+        body.light .card-title {
+            color: #0F172A;
+        }
+
+        body.light .card-desc {
+            color: #64748B;
+        }
+
+        body.light .features-list {
+            border-top: 1px solid #E2E8F0;
+        }
+
+        body.light .feature-item {
+            color: #334155;
+        }
+
+        body.light .card-badge.badge-custom {
+            background: #EFF6FF;
+            color: #2563EB;
+            border-color: #BFDBFE;
+        }
+
+        body.light .card-badge.badge-traccar {
+            background: #FAF5FF;
+            color: #7C3AED;
+            border-color: #E9D5FF;
+        }
+
+        body.light .icon-custom {
+            background: #EFF6FF;
+            border-color: #DBEAFE;
+            color: #2563EB;
+        }
+
+        body.light .icon-traccar {
+            background: #FAF5FF;
+            border-color: #F3E8FF;
+            color: #7C3AED;
+        }
+
+        /* Botón Primario en Modo Claro (Opción 1: Plataforma Propia) */
+        body.light .card-custom .btn-custom {
+            background: #0F172A;
+            color: #FFFFFF;
+            border: 1px solid #0F172A;
+            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.15);
+            font-weight: 700;
+        }
+
+        body.light .card-custom:hover .btn-custom {
+            background: #1E293B;
+            border-color: #1E293B;
+            color: #FFFFFF;
+        }
+
+        /* Botón Secundario en Modo Claro (Opción 2: Consola Traccar) */
+        body.light .card-traccar .btn-traccar {
+            background: #FFFFFF;
+            color: #1E293B;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            font-weight: 600;
+        }
+
+        body.light .card-traccar:hover .btn-traccar {
+            background: #F8FAFC;
+            border-color: #CBD5E1;
+            color: #0F172A;
+        }
+
+        body.light .footer-note {
+            color: #64748B;
+        }
+
+        body.light .footer-note code {
+            background: #F1F5F9;
+            border-color: #E2E8F0;
+            color: #334155;
+        }
     </style>
 </head>
 <body>
+
+    <!-- Botón Toggle de Tema en la esquina superior derecha -->
+    <div class="theme-bar">
+        <button id="theme-toggle" class="theme-toggle" type="button" title="Alternar Modo Claro / Oscuro" aria-label="Alternar tema">
+            <span id="theme-icon">☀️</span>
+            <span id="theme-text">Modo Claro</span>
+        </button>
+    </div>
 
     <div class="ambient-glow"></div>
 
@@ -412,5 +603,64 @@
         </p>
     </main>
 
+    <!-- Sincronización de Tema (localStorage + Cookie iot_theme) -->
+    <script>
+        (function() {
+            var THEME_KEY = 'iot_theme';
+
+            function getSavedTheme() {
+                try {
+                    var local = localStorage.getItem(THEME_KEY);
+                    if (local === 'light' || local === 'dark') return local;
+                } catch (e) {}
+
+                var match = document.cookie.match(new RegExp('(?:^|; )' + THEME_KEY + '=([^;]+)'));
+                if (match && (match[1] === 'light' || match[1] === 'dark')) {
+                    return match[1];
+                }
+
+                // Por defecto modo oscuro inalterado
+                return 'dark';
+            }
+
+            function applyTheme(theme) {
+                var body = document.body;
+                var icon = document.getElementById('theme-icon');
+                var text = document.getElementById('theme-text');
+
+                if (theme === 'light') {
+                    body.classList.add('light');
+                    document.documentElement.setAttribute('data-theme', 'light');
+                    if (icon) icon.textContent = '🌙';
+                    if (text) text.textContent = 'Modo Oscuro';
+                } else {
+                    body.classList.remove('light');
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    if (icon) icon.textContent = '☀️';
+                    if (text) text.textContent = 'Modo Claro';
+                }
+
+                try {
+                    localStorage.setItem(THEME_KEY, theme);
+                } catch (e) {}
+
+                document.cookie = THEME_KEY + '=' + theme + '; path=/; max-age=31536000; SameSite=Lax';
+            }
+
+            // Aplicar tema inmediatamente
+            var initialTheme = getSavedTheme();
+            applyTheme(initialTheme);
+
+            // Listener
+            var btn = document.getElementById('theme-toggle');
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    var isCurrentlyLight = document.body.classList.contains('light');
+                    applyTheme(isCurrentlyLight ? 'dark' : 'light');
+                });
+            }
+        })();
+    </script>
 </body>
 </html>
+

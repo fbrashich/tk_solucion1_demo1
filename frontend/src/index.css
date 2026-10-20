@@ -92,3 +92,184 @@ code, pre, .font-mono {
   animation: radar-pulse-amber 2.5s infinite cubic-bezier(0.4, 0, 0.6, 1);
 }
 
+/* ==============================================================================
+   MODO CLARO (LIGHT THEME) DESIGN TOKENS & OVERRIDES
+   Se aplican ÚNICAMENTE cuando la etiqueta <html> tiene la clase .light.
+   El modo oscuro (.dark o por defecto) se mantiene 100% intacto y sin regresiones.
+   ============================================================================== */
+
+html.light {
+  color-scheme: light;
+}
+
+html.light body {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+/* Fondos de lienzo y contenedor general */
+html.light .bg-slate-950,
+html.light .bg-slate-950\/90,
+html.light .bg-slate-950\/80 {
+  background-color: #F8FAFC !important;
+}
+
+/* Tarjetas, paneles, modales y barras de navegación */
+html.light .bg-slate-900,
+html.light .bg-slate-900\/95,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/80,
+html.light .bg-slate-900\/70,
+html.light .bg-slate-900\/60,
+html.light .bg-slate-900\/50,
+html.light .bg-slate-900\/40 {
+  background-color: #FFFFFF !important;
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.06), 0 4px 12px -2px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Superficies intermedias, badges, contenedores de métricas */
+html.light .bg-slate-950\/70,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/50,
+html.light .bg-slate-950\/40,
+html.light .bg-slate-800\/60,
+html.light .bg-slate-800\/50,
+html.light .bg-slate-800\/40 {
+  background-color: #F8FAFC !important;
+}
+
+/* Botones secundarios y elementos slate-800 */
+html.light .bg-slate-800,
+html.light .bg-slate-800\/90,
+html.light .bg-slate-800\/80 {
+  background-color: #F1F5F9 !important;
+  color: #1E293B !important;
+}
+
+html.light .hover\:bg-slate-700:hover,
+html.light .hover\:bg-slate-700\/90:hover,
+html.light .hover\:bg-slate-800:hover {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+/* Bordes en modo claro */
+html.light .border-slate-800,
+html.light .border-slate-800\/90,
+html.light .border-slate-800\/80,
+html.light .border-slate-800\/70,
+html.light .border-slate-800\/50,
+html.light .border-slate-700,
+html.light .border-slate-700\/80,
+html.light .border-slate-700\/50 {
+  border-color: #E2E8F0 !important;
+}
+
+/* Tipografía en modo claro */
+html.light .text-white,
+html.light .text-slate-100 {
+  color: #0F172A !important;
+}
+
+html.light .text-slate-200,
+html.light .text-slate-300 {
+  color: #1E293B !important;
+}
+
+html.light .text-slate-400 {
+  color: #64748B !important;
+}
+
+html.light .text-slate-500 {
+  color: #94A3B8 !important;
+}
+
+/* Preservar texto blanco en botones oscuros o primarios */
+html.light button.bg-\[\#0F172A\],
+html.light button.bg-\[\#0F172A\] *,
+html.light .btn-primary,
+html.light .btn-primary *,
+html.light .preserve-white,
+html.light .preserve-white * {
+  color: #FFFFFF !important;
+}
+
+/* Formularios, inputs y selects en modo claro */
+html.light input:not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+html.light input:focus,
+html.light select:focus,
+html.light textarea:focus {
+  border-color: #3B82F6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Tablas en modo claro */
+html.light thead {
+  background-color: #F8FAFC !important;
+  color: #475569 !important;
+}
+
+html.light tbody tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+/* Leaflet en modo claro */
+html.light .leaflet-container {
+  background-color: #F8FAFC !important;
+}
+
+html.light .leaflet-dark-tiles {
+  filter: none !important;
+}
+
+html.light .leaflet-popup-content-wrapper {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08) !important;
+}
+
+html.light .leaflet-popup-tip {
+  background: #FFFFFF !important;
+}
+
+/* Halo resplandor ambiental característico para tarjetas y login en modo claro */
+.ambient-halo-light {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 130%;
+  height: 130%;
+  max-width: 680px;
+  max-height: 680px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, rgba(99, 102, 241, 0.14) 45%, rgba(248, 250, 252, 0) 75%);
+  filter: blur(55px);
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 9999px;
+}
+
+/* Custom scrollbars en modo claro */
+html.light ::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.8);
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.9);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 1);
+}
+

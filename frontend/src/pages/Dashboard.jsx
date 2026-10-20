@@ -10,6 +10,8 @@ import {
   deleteDevice
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import ThemeToggle from '../components/ThemeToggle';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -82,6 +84,7 @@ const createStatusMarkerIcon = (statusStr, isSelected = false) => {
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const { isLight } = useTheme();
   
   // Selector de dispositivo: 'all' o ID específico (ej. 'MESA_01')
   const [selectedDeviceId, setSelectedDeviceId] = useState('all');
@@ -503,6 +506,9 @@ export default function Dashboard() {
               <Satellite className="w-3.5 h-3.5 text-purple-400" />
               <span className="hidden sm:inline">Traccar</span>
             </a>
+
+            {/* Selector de Tema (Modo Claro / Modo Oscuro) */}
+            <ThemeToggle />
 
             {/* Usuario / Salir */}
             <div className="flex items-center gap-1.5 pl-1 border-l border-slate-800">
@@ -994,10 +1000,12 @@ export default function Dashboard() {
 
                 {mapStyle === 'dark' && (
                   <TileLayer
-                    key="dark-tiles"
+                    key={`dark-tiles-${isLight ? 'light' : 'dark'}`}
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    className="leaflet-dark-tiles"
+                    url={isLight 
+                      ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"}
+                    className={isLight ? "" : "leaflet-dark-tiles"}
                   />
                 )}
                 {mapStyle === 'satellite' && (

@@ -12,6 +12,8 @@ import {
   deleteAdminUser 
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -202,6 +204,9 @@ export default function AdminDashboard() {
               <Satellite className="w-3.5 h-3.5 text-purple-400" />
               <span className="hidden sm:inline">Traccar</span>
             </a>
+
+            {/* Selector de Tema (Modo Claro / Modo Oscuro) */}
+            <ThemeToggle />
 
             <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
               <div className="flex flex-col text-right hidden sm:block">
