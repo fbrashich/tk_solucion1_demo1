@@ -24,4 +24,11 @@
     <entry key='filter.enable'>false</entry>
     <entry key='event.enable'>true</entry>
 
+    <!-- Unified Telemetry Ingestion: Real-time JSON forwarding to FastAPI backend -->
+    <entry key='forward.enable'>true</entry>
+    <entry key='forward.url'>http://api:8000/api/ingest/traccar</entry>
+    <entry key='forward.type'>json</entry>
+    <entry key='forward.retry.enable'>true</entry>
+    <entry key='forward.retry.delay'>10</entry>
+
 </properties>

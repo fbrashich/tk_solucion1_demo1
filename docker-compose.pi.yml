@@ -67,10 +67,9 @@ services:
       - SECRET_KEY=tokioba_super_secret_pi_key_2026
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
-      - TRACCAR_URL=http://traccar:8082
-      - TRACCAR_EMAIL=admin@tokioba.com
+      - TRACCAR_API_URL=http://traccar:8082/api
+      - TRACCAR_USER=admin@tokioba.com
       - TRACCAR_PASSWORD=tokioba_admin_2026
-      - TRACCAR_SYNC_INTERVAL=5
     ports:
       - "8000:8000"
     depends_on:

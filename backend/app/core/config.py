@@ -9,7 +9,15 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120 # 2 horas (Estándar seguro para turnos operativos)
 
+    # Configuración de integración con Traccar API
+    TRACCAR_API_URL: str = os.getenv("TRACCAR_API_URL", os.getenv("TRACCAR_URL", "http://traccar:8082")).rstrip("/")
+    TRACCAR_USER: str = os.getenv("TRACCAR_USER", os.getenv("TRACCAR_EMAIL", "admin@tokioba.com"))
+    TRACCAR_PASSWORD: str = os.getenv("TRACCAR_PASSWORD", "tokioba_admin_2026")
+
     # Para poder tomar variables de entorno del sistema automáticamente
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 settings = Settings()
+# Normalizar TRACCAR_API_URL para que siempre incluya /api
+if not settings.TRACCAR_API_URL.endswith("/api"):
+    settings.TRACCAR_API_URL = f"{settings.TRACCAR_API_URL}/api"

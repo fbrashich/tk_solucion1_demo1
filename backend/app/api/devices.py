@@ -1,5 +1,6 @@
 import csv
 import io
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,9 @@ from app.schemas.schemas import (
     FleetSummaryResponse
 )
 from app.api.deps import get_current_user, get_current_admin
+from app.services.traccar_client import traccar_client
 
+logger = logging.getLogger("devices")
 router = APIRouter()
 
 def ensure_utc(dt: datetime) -> datetime:
@@ -127,6 +130,20 @@ async def create_device(
             existing_dev.category = payload.category.strip() if payload.category else "machinery"
             await db.commit()
             await db.refresh(existing_dev)
+
+            # Sincronización con Traccar API
+            sync_uid = clean_traccar_id or clean_id
+            try:
+                await traccar_client.find_or_create_device(
+                    unique_id=sync_uid,
+                    name=existing_dev.name,
+                    model=existing_dev.traccar_model,
+                    phone=existing_dev.sim_phone,
+                    category=existing_dev.category
+                )
+            except Exception as e:
+                logger.warning(f"[DEVICES] No se pudo sincronizar alta reclamada con Traccar ({sync_uid}): {e}")
+
             return existing_dev
 
     device = Device(
@@ -144,6 +161,20 @@ async def create_device(
     db.add(device)
     await db.commit()
     await db.refresh(device)
+
+    # Sincronización con Traccar API
+    sync_uid = clean_traccar_id or clean_id
+    try:
+        await traccar_client.find_or_create_device(
+            unique_id=sync_uid,
+            name=device.name,
+            model=device.traccar_model,
+            phone=device.sim_phone,
+            category=device.category
+        )
+    except Exception as e:
+        logger.warning(f"[DEVICES] No se pudo sincronizar alta de equipo con Traccar ({sync_uid}): {e}")
+
     return device
 
 @router.put("/{device_id}", response_model=DeviceResponse)
@@ -161,6 +192,8 @@ async def update_device(
     # Validar permisos de propiedad si es operador
     if current_user.role != "admin" and device.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permisos para modificar este equipo")
+
+    old_unique_id = device.traccar_unique_id or device.device_id
 
     if payload.name is not None:
         device.name = payload.name.strip()
@@ -181,6 +214,31 @@ async def update_device(
 
     await db.commit()
     await db.refresh(device)
+
+    # Propagar modificación a Traccar API
+    new_unique_id = device.traccar_unique_id or device.device_id
+    try:
+        traccar_dev = await traccar_client.find_device_by_unique_id(old_unique_id)
+        if traccar_dev and "id" in traccar_dev:
+            await traccar_client.update_device(
+                traccar_id=traccar_dev["id"],
+                name=device.name,
+                unique_id=new_unique_id,
+                model=device.traccar_model,
+                phone=device.sim_phone,
+                category=device.category
+            )
+        else:
+            await traccar_client.find_or_create_device(
+                unique_id=new_unique_id,
+                name=device.name,
+                model=device.traccar_model,
+                phone=device.sim_phone,
+                category=device.category
+            )
+    except Exception as e:
+        logger.warning(f"[DEVICES] Error propagando actualización hacia Traccar ({new_unique_id}): {e}")
+
     return device
 
 @router.delete("/{device_id}")
@@ -198,11 +256,21 @@ async def delete_device(
     if current_user.role != "admin" and device.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="No tienes permisos para eliminar este equipo")
 
+    target_uid = device.traccar_unique_id or device.device_id
+
     # Limpiar estado acumulado y eventos de telemetría asociados
     await db.execute(delete(DeviceState).where(DeviceState.device_id == device.device_id))
     await db.execute(delete(TelemetryEvent).where(TelemetryEvent.device_id == device.device_id))
     await db.delete(device)
     await db.commit()
+
+    # Propagar eliminación a Traccar API
+    if target_uid:
+        try:
+            await traccar_client.delete_device_by_unique_id(target_uid)
+        except Exception as e:
+            logger.warning(f"[DEVICES] Error propagando baja hacia Traccar ({target_uid}): {e}")
+
     return {"status": "ok", "message": f"Dispositivo '{device_id}' eliminado correctamente"}
 
 # ==========================================
