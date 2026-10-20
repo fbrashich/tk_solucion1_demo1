@@ -8,6 +8,10 @@ from app.core.config import settings
 from app.db import AsyncSessionLocal
 from app.services.traccar_client import traccar_client
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 logger = logging.getLogger("main")
 
 async def run_startup_reconciliation():
