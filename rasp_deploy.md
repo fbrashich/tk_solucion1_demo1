@@ -379,15 +379,15 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Servidor Web Nginx (Compila frontend automáticamente dentro de Docker)
+  # Servidor Web Nginx (Compila frontend automáticamente dentro de Docker, escucha interno en 8081)
   web:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: telemetry_web
     restart: unless-stopped
-    ports:
-      - "3000:80"
+    expose:
+      - "8081"
     depends_on:
       - api
     deploy:
@@ -400,7 +400,29 @@ services:
         max-size: "5m"
         max-file: "2"
 
-  # Túnel Público Seguro para el Dashboard Web (ZROK)
+  # Gateway Router Nginx (Único servicio expuesto en puerto 80 con Selector Visual y Enrutamiento por Cookie)
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: telemetry_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - web
+      - traccar
+    deploy:
+      resources:
+        limits:
+          memory: 30M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # Túnel Público Seguro para el Gateway Web (ZROK)
   zrok:
     image: openziti/zrok2:latest
     container_name: telemetry_zrok
@@ -408,10 +430,10 @@ services:
     stop_signal: SIGINT
     stop_grace_period: 20s
     depends_on:
-      - web
+      - gateway
     volumes:
       - ${HOME}/.zrok2:/home/ziggy/.zrok2
-    command: share public http://web:80 -n public:iot-web-portal --headless
+    command: share public http://gateway:80 -n public:iot-web-portal --headless
     deploy:
       resources:
         limits:
@@ -436,23 +458,26 @@ cd /mnt/ssd/tokioba-iot
 # 1. Compilar primero el backend solo
 docker compose -f docker-compose.pi.yml build api
 
-# 2. Compilar el frontend solo
+# 2. Compilar el frontend web
 docker compose -f docker-compose.pi.yml build web
 
-# 3. Levantar todo el stack (como ya están compilados, levanta en 3 segundos)
+# 3. Compilar el Gateway Router
+docker compose -f docker-compose.pi.yml build gateway
+
+# 4. Levantar todo el stack (como ya están compilados, levanta en 3 segundos)
 docker compose -f docker-compose.pi.yml up -d
 ```
 
-*(Al compilar primero el backend y luego el frontend por separado, evitamos que Docker compile ambos al mismo tiempo y sature los 1 GB de RAM. El frontend tardará ~2-3 minutos en su etapa multi-stage).*
+*(Al compilar primero el backend, luego el frontend y el gateway por separado, evitamos saturar los 1 GB de RAM).*
 
 ### Verificación de consumo de RAM:
 ```bash
 docker stats --no-stream
 free -h
 ```
-* **Consumo de memoria total del stack:** **~105 MB de RAM**.
-* **RAM libre para el sistema:** **> 730 MB**.
-* **Acceso local:** Abre en tu navegador `http://SRVIOT01.local:3000`.
+* **Consumo de memoria total del stack:** **~135 MB de RAM**.
+* **RAM libre para el sistema:** **> 700 MB**.
+* **Acceso local:** Abre en tu navegador `http://SRVIOT01.local` (o `http://172.16.22.2`).
 
 ---
 
@@ -482,9 +507,10 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     # 1. Traer los cambios limpios
     git reset --hard origin/main
     
-    # 2. Reconstruir secuencialmente (api primero, luego web) para proteger la RAM
+    # 2. Reconstruir secuencialmente para proteger la RAM
     docker compose -f docker-compose.pi.yml build api
     docker compose -f docker-compose.pi.yml build web
+    docker compose -f docker-compose.pi.yml build gateway
     docker compose -f docker-compose.pi.yml up -d
     
     # 3. Limpiar imágenes viejas de Docker para no acumular espacio
