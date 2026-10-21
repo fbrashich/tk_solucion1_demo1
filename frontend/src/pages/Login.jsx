@@ -39,6 +39,22 @@ export default function Login() {
     <div className={`min-h-screen flex flex-col justify-center items-center p-4 relative overflow-hidden transition-colors duration-200 ${
       isLight ? 'bg-[#F8FAFC]' : 'bg-slate-950'
     }`}>
+      {/* Botón para volver al selector de plataforma */}
+      <div className="absolute top-4 left-4 z-50">
+        <a
+          href="/logout-platform"
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border backdrop-blur-md transition-all ${
+            isLight
+              ? 'bg-white/90 hover:bg-slate-100 text-slate-700 border-slate-200 shadow-sm'
+              : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-700/80'
+          }`}
+          title="Volver al Selector de Plataforma"
+        >
+          <span>←</span>
+          <span>Selector</span>
+        </a>
+      </div>
+
       {/* Botón conmutador de tema en la esquina superior derecha */}
       <div className="absolute top-4 right-4 z-50">
         <ThemeToggle showLabel={true} />

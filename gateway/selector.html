@@ -540,7 +540,7 @@
         <div class="cards-grid">
             
             <!-- Option 1: Custom IoT Platform -->
-            <a href="/set-platform/custom" class="card card-custom" id="btn-platform-custom">
+            <a href="/set-platform/custom" class="card card-custom" id="btn-platform-custom" data-platform="custom">
                 <div class="icon-wrapper icon-custom">🚀</div>
                 <span class="card-badge badge-custom">Interno: Puerto 8081</span>
                 <h2 class="card-title">Mi Plataforma IoT</h2>
@@ -568,7 +568,7 @@
             </a>
 
             <!-- Option 2: Traccar Web Console -->
-            <a href="/set-platform/traccar" class="card card-traccar" id="btn-platform-traccar">
+            <a href="/set-platform/traccar" class="card card-traccar" id="btn-platform-traccar" data-platform="traccar">
                 <div class="icon-wrapper icon-traccar">🛰️</div>
                 <span class="card-badge badge-traccar">Interno: Puerto 8082</span>
                 <h2 class="card-title">Consola Traccar</h2>
@@ -599,13 +599,72 @@
 
         <!-- Footer -->
         <p class="footer-note">
-            La plataforma seleccionada se almacena en la cookie <code>iot_target</code>. Puedes volver a este selector en cualquier momento navegando a <code>/selector</code>.
+            La plataforma seleccionada se almacena en la sesión actual. Puedes volver a este selector en cualquier momento navegando a <code>/selector</code>.
         </p>
     </main>
 
-    <!-- Sincronización de Tema (localStorage + Cookie iot_theme) -->
+    <!-- Lógica de Navegación, Limpieza de Service Workers y Sincronización de Tema -->
     <script>
         (function() {
+            // 1. Limpieza radical de Service Workers y CacheStorage
+            // Previene que el Service Worker PWA de Traccar secuestre la navegación hacia /selector
+            function purgeServiceWorkersAndCaches() {
+                try {
+                    if ('serviceWorker' in navigator) {
+                        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                            for (var i = 0; i < registrations.length; i++) {
+                                registrations[i].unregister();
+                            }
+                        });
+                    }
+                    if ('caches' in window) {
+                        caches.keys().then(function(names) {
+                            for (var i = 0; i < names.length; i++) {
+                                caches.delete(names[i]);
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[GATEWAY] Error limpiando SW/caches:', e);
+                }
+
+                // En el selector la cookie iot_target siempre debe estar limpia
+                document.cookie = "iot_target=; path=/; max-age=0; SameSite=Lax";
+            }
+
+            // Ejecutar limpieza inmediatamente
+            purgeServiceWorkersAndCaches();
+
+            // Ejecutar también cuando el navegador vuelve atrás desde la caché BFCache
+            window.addEventListener('pageshow', function() {
+                purgeServiceWorkersAndCaches();
+            });
+
+            // 2. Navegación directa sin salto 302 en el historial
+            // Al fijar la cookie directamente y navegar a '/', el botón "Atrás" del navegador
+            // regresa limpiamente al selector sin quedar atrapado en un bucle de redirección.
+            function navigateToPlatform(target, e) {
+                if (e) e.preventDefault();
+                // Cookie de sesión (sin Max-Age) para que al cerrar el navegador o volver a entrar se pida plataforma
+                document.cookie = "iot_target=" + target + "; path=/; SameSite=Lax";
+                window.location.href = "/";
+            }
+
+            var btnCustom = document.getElementById('btn-platform-custom');
+            if (btnCustom) {
+                btnCustom.addEventListener('click', function(e) {
+                    navigateToPlatform('custom', e);
+                });
+            }
+
+            var btnTraccar = document.getElementById('btn-platform-traccar');
+            if (btnTraccar) {
+                btnTraccar.addEventListener('click', function(e) {
+                    navigateToPlatform('traccar', e);
+                });
+            }
+
+            // 3. Sincronización de Tema (localStorage + Cookie iot_theme)
             var THEME_KEY = 'iot_theme';
 
             function getSavedTheme() {
@@ -647,14 +706,12 @@
                 document.cookie = THEME_KEY + '=' + theme + '; path=/; max-age=31536000; SameSite=Lax';
             }
 
-            // Aplicar tema inmediatamente
             var initialTheme = getSavedTheme();
             applyTheme(initialTheme);
 
-            // Listener
-            var btn = document.getElementById('theme-toggle');
-            if (btn) {
-                btn.addEventListener('click', function() {
+            var themeBtn = document.getElementById('theme-toggle');
+            if (themeBtn) {
+                themeBtn.addEventListener('click', function() {
                     var isCurrentlyLight = document.body.classList.contains('light');
                     applyTheme(isCurrentlyLight ? 'dark' : 'light');
                 });

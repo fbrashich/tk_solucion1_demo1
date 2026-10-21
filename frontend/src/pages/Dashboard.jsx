@@ -499,7 +499,7 @@ export default function Dashboard() {
 
             {/* Acceso Rápido a Traccar / Selector */}
             <a
-              href="/selector"
+              href="/logout-platform"
               className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 active:scale-95 border border-purple-500/30 text-xs font-bold text-purple-300 transition-all cursor-pointer"
               title="Cambiar a Consola Traccar o Selector de Plataformas"
             >
