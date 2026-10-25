@@ -91,20 +91,29 @@ async def init_db():
         else:
             logger.info("Operator user (aldo) verified.")
 
-        # 3. Asegurar dispositivos iniciales de demo para el operador Aldo
+        # 3. Asegurar usuario fabianb@tokioba.com y único dispositivo activo
+        res_fabian = await session.execute(select(User).where(User.username == "fabianb@tokioba.com"))
+        fabian_user = res_fabian.scalars().first()
+        if not fabian_user:
+            logger.info("Creating default operator user (fabianb@tokioba.com)...")
+            fabian_user = User(
+                username="fabianb@tokioba.com",
+                hashed_password=get_password_hash("fabian123"),
+                role="operator",
+                is_active=True
+            )
+            session.add(fabian_user)
+            await session.flush()
+        else:
+            logger.info("Operator user (fabianb@tokioba.com) verified.")
+
         initial_devices = [
-            ("ATC700_01", "Teltonika ATC700", "GPS Industrial", "Unidad Telemática Teltonika ATC700 (Hardware Real)", "860693080022560", "Teltonika ATC700", "", "car"),
-            ("MESA_01", "Mesa Vibratoria Principal", "Mesa Vibratoria", "Sector A - Lavado y Separación", "868204030100001", "Teltonika FMB920", "+5491155550001", "machinery"),
-            ("MESA_02", "Mesa Clasificadora 02", "Mesa Clasificadora", "Sector B - Concentración Gravimétrica", "868204030100002", "Teltonika FMB920", "+5491155550002", "machinery"),
-            ("PALA_01", "Pala Cargadora Frontal", "Maquinaria Pesada", "Área de Acopio y Alimentación", "868204030100003", "Queclink GV300", "+5491155550003", "tractor")
+            ("FMC150_331", "Van  Operarios", "Teltonika GPS", "Unidad de Transporte de Operarios (FMC150)", "863238073460331", "Teltonika FMC150", "", "car")
         ]
 
-        res_fabian = await session.execute(select(User).where(User.username == "fabianb_op"))
-        fabian_user = res_fabian.scalars().first()
-
         for dev_id, name, dev_type, desc, t_id, t_model, sim, cat in initial_devices:
-            owner_user_id = (fabian_user.id if fabian_user and dev_id == "ATC700_01" else aldo_user.id)
-            dev_res = await session.execute(select(Device).where(Device.device_id == dev_id))
+            owner_user_id = fabian_user.id
+            dev_res = await session.execute(select(Device).where(Device.traccar_unique_id == t_id))
             dev_obj = dev_res.scalars().first()
             if not dev_obj:
                 logger.info(f"Seeding default device: {dev_id} ({name}) for user {owner_user_id}")
@@ -122,17 +131,13 @@ async def init_db():
                 )
                 session.add(new_dev)
             else:
-                # Si el usuario es fabianb_op y el dispositivo es ATC700_01, asegurar asignación
-                if dev_id == "ATC700_01" and fabian_user:
-                    dev_obj.user_id = fabian_user.id
-                elif dev_obj.user_id is None:
-                    dev_obj.user_id = aldo_user.id
+                dev_obj.user_id = owner_user_id
+                dev_obj.name = name
+                dev_obj.is_active = True
                 if not dev_obj.traccar_unique_id:
                     dev_obj.traccar_unique_id = t_id
                 if not dev_obj.traccar_model:
                     dev_obj.traccar_model = t_model
-                if not dev_obj.sim_phone:
-                    dev_obj.sim_phone = sim
                 if not dev_obj.category:
                     dev_obj.category = cat
 

@@ -140,4 +140,25 @@ export const deleteAdminUser = async (userId) => {
   return response.data;
 };
 
+// ==========================================
+// VISOR TELEMÁTICO EN VIVO (LIVE STREAM)
+// ==========================================
+
+export const getLiveLogs = async (limit = 60, filter = '') => {
+  const params = { limit };
+  if (filter) params.filter = filter;
+  const response = await api.get('/live/logs', { params });
+  return response.data;
+};
+
+export const getLiveStreamUrl = (filter = '') => {
+  const token = localStorage.getItem('token') || '';
+  let url = `${API_URL}/live/stream?token=${encodeURIComponent(token)}`;
+  if (filter) {
+    url += `&filter=${encodeURIComponent(filter)}`;
+  }
+  return url;
+};
+
 export default api;
+

@@ -9,6 +9,7 @@ from sqlalchemy import desc, or_
 from app.db import get_db
 from app.models.models import TelemetryEvent, DeviceState, Device, User
 from app.schemas.schemas import IngestPayload
+from app.services.live_stream import live_manager
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -294,6 +295,38 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             device_state.last_raw_data = enriched_raw
 
         processed_count += 1
+
+        # Emitir al Live Stream en tiempo real
+        try:
+            await live_manager.broadcast({
+                "id": f"ingest_{local_device.device_id}_{int(fix_time.timestamp())}",
+                "timestamp": fix_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "kind": "GPS_FIX",
+                "channel": str(pos.get("protocol", "teltonika")).upper(),
+                "socket_id": "FORWARDER",
+                "imei": clean_unique_id,
+                "message": f"Posición {local_device.name} ({clean_unique_id}): Lat={lat:.5f}, Lon={lon:.5f}, Vel={speed_kmh} km/h, Bat={battery_val or 'N/A'}",
+                "details": {
+                    "device_id": local_device.device_id,
+                    "device_name": local_device.name,
+                    "imei": clean_unique_id,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "speed_kmh": speed_kmh,
+                    "ignition": ignition,
+                    "motion": motion,
+                    "power_voltage": power_val,
+                    "battery_voltage": battery_val,
+                    "satellites": sat,
+                    "signal_rssi": rssi,
+                    "total_distance_km": round(total_dist / 1000.0, 1) if total_dist else None,
+                    "engine_hours": round(device_state.engine_hours, 2) if device_state else 0.0,
+                    "protocol": pos.get("protocol", "teltonika")
+                },
+                "raw": enriched_raw
+            })
+        except Exception as e:
+            logger.warning(f"[INGEST] Error emitiendo a live stream: {e}")
 
     await db.commit()
     return {

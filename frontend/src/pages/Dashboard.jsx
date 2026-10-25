@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
+import LiveConsoleModal from '../components/LiveConsoleModal';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -104,6 +105,7 @@ export default function Dashboard() {
   const [selectedMapCenter, setSelectedMapCenter] = useState(null);
   const [activeMobileTab, setActiveMobileTab] = useState('overview'); // 'overview' | 'logs'
   const [selectedRawData, setSelectedRawData] = useState(null);
+  const [isLiveConsoleOpen, setIsLiveConsoleOpen] = useState(false);
 
   // Estado para gestión de dispositivos por el Operador (CRUD Completo)
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -495,6 +497,16 @@ export default function Dashboard() {
             >
               <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden md:inline">Sync ({countdown}s)</span>
+            </button>
+
+            {/* Botón Visor Telemático en Vivo */}
+            <button
+              onClick={() => setIsLiveConsoleOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 border border-emerald-500/40 text-xs font-bold text-emerald-300 transition-all cursor-pointer shadow-sm hover:shadow-emerald-950/30"
+              title="Abrir visor telemático en tiempo real (Sockets TCP/UDP, Tramas Hex y Posiciones)"
+            >
+              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span className="hidden sm:inline">Visor en Vivo</span>
             </button>
 
             {/* Acceso Rápido a Traccar / Selector */}
@@ -1872,6 +1884,12 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal Visor Telemático en Vivo */}
+      <LiveConsoleModal 
+        isOpen={isLiveConsoleOpen} 
+        onClose={() => setIsLiveConsoleOpen(false)} 
+      />
 
     </div>
   );

@@ -44,12 +44,17 @@ async def run_periodic_reconciliation():
         except Exception as e:
             logger.warning(f"[PERIODIC SYNC] Error en ciclo periódico de reconciliación Traccar: {e}")
 
+from app.services.live_stream import live_manager
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Iniciar reconciliación continua de dispositivos Traccar en segundo plano
     reconcile_task = asyncio.create_task(run_periodic_reconciliation())
+    # Iniciar monitoreo del log en tiempo real de Traccar
+    live_manager.start()
     yield
     # Limpieza ordenada en apagado
+    live_manager.stop()
     if not reconcile_task.done():
         reconcile_task.cancel()
         try:

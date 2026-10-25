@@ -3,7 +3,7 @@ import {
   Users, Shield, UserPlus, LogOut, RefreshCw, 
   Trash2, ToggleLeft, ToggleRight, CheckCircle2, 
   AlertCircle, Cpu, Search, Check, X, Key,
-  Layers, HardDrive, ShieldAlert, Satellite
+  Layers, HardDrive, ShieldAlert, Satellite, Radio
 } from 'lucide-react';
 import { 
   getAdminUsers, 
@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
+import LiveConsoleModal from '../components/LiveConsoleModal';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -22,6 +23,7 @@ export default function AdminDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notification, setNotification] = useState(null);
+  const [isLiveConsoleOpen, setIsLiveConsoleOpen] = useState(false);
 
   // Modal para crear nueva cuenta
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -193,6 +195,16 @@ export default function AdminDashboard() {
             >
               <RefreshCw className={`w-3.5 h-3.5 text-purple-400 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refrescar</span>
+            </button>
+
+            {/* Botón Visor Telemático en Vivo */}
+            <button
+              onClick={() => setIsLiveConsoleOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 border border-emerald-500/40 text-xs font-bold text-emerald-300 transition-all cursor-pointer shadow-sm hover:shadow-emerald-950/30"
+              title="Abrir visor telemático en tiempo real (Sockets TCP/UDP, Tramas Hex y Posiciones)"
+            >
+              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span className="hidden sm:inline">Visor en Vivo</span>
             </button>
 
             {/* Acceso Rápido a Traccar / Selector */}
@@ -644,6 +656,12 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal Visor Telemático en Vivo */}
+      <LiveConsoleModal 
+        isOpen={isLiveConsoleOpen} 
+        onClose={() => setIsLiveConsoleOpen(false)} 
+      />
 
     </div>
   );
