@@ -44,6 +44,19 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_longitude FLOAT;"))
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_speed FLOAT;"))
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_raw_data JSONB;"))
+
+                # Etapa 1: Campos decodificados Teltonika FMC150
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS external_power FLOAT;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS internal_battery FLOAT;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS sleep_mode INTEGER;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS gnss_status INTEGER;"))
+                await conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN IF NOT EXISTS network_operator VARCHAR;"))
+
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS external_power FLOAT;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS internal_battery FLOAT;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS sleep_mode INTEGER;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS gnss_status INTEGER;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS network_operator VARCHAR;"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")

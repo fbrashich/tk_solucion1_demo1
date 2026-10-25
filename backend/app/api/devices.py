@@ -361,7 +361,12 @@ async def get_all_devices_status(
             engine_hours=engine_hours,
             last_updated=last_dt,
             last_speed=dev_state.last_speed if dev_state else (last_event.speed if last_event else None),
-            raw_data=dev_state.last_raw_data if dev_state else (last_event.raw_data if last_event else None)
+            raw_data=dev_state.last_raw_data if dev_state else (last_event.raw_data if last_event else None),
+            external_power=dev_state.external_power if dev_state else (last_event.external_power if last_event else None),
+            internal_battery=dev_state.internal_battery if dev_state else (last_event.internal_battery if last_event else None),
+            sleep_mode=dev_state.sleep_mode if dev_state else (last_event.sleep_mode if last_event else None),
+            gnss_status=dev_state.gnss_status if dev_state else (last_event.gnss_status if last_event else None),
+            network_operator=dev_state.network_operator if dev_state else (last_event.network_operator if last_event else None)
         ))
 
     return FleetSummaryResponse(
@@ -421,7 +426,12 @@ async def get_device_status(
         engine_hours=round(device_state.engine_hours, 2) if device_state else 0.0,
         last_updated=last_dt,
         last_speed=device_state.last_speed if device_state else (last_event.speed if last_event else None),
-        raw_data=device_state.last_raw_data if device_state else (last_event.raw_data if last_event else None)
+        raw_data=device_state.last_raw_data if device_state else (last_event.raw_data if last_event else None),
+        external_power=device_state.external_power if device_state else (last_event.external_power if last_event else None),
+        internal_battery=device_state.internal_battery if device_state else (last_event.internal_battery if last_event else None),
+        sleep_mode=device_state.sleep_mode if device_state else (last_event.sleep_mode if last_event else None),
+        gnss_status=device_state.gnss_status if device_state else (last_event.gnss_status if last_event else None),
+        network_operator=device_state.network_operator if device_state else (last_event.network_operator if last_event else None)
     )
 
 @router.get("/{device_id}/logs", response_model=List[TelemetryEventResponse])

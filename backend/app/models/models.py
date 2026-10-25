@@ -49,6 +49,13 @@ class TelemetryEvent(Base):
     course = Column(Float, nullable=True)
     raw_data = Column(JSON, nullable=True) # Almacena todo el JSON devuelto por Traccar
 
+    # Campos decodificados Teltonika FMC150 (Etapa 1)
+    external_power = Column(Float, nullable=True)
+    internal_battery = Column(Float, nullable=True)
+    sleep_mode = Column(Integer, nullable=True)
+    gnss_status = Column(Integer, nullable=True)
+    network_operator = Column(String, nullable=True)
+
 class DeviceState(Base):
     __tablename__ = "device_states"
     id = Column(Integer, primary_key=True, index=True)
@@ -63,3 +70,10 @@ class DeviceState(Base):
     last_longitude = Column(Float, nullable=True)
     last_speed = Column(Float, nullable=True)
     last_raw_data = Column(JSON, nullable=True)
+
+    # Campos consolidados Teltonika FMC150 (Etapa 1)
+    external_power = Column(Float, nullable=True)
+    internal_battery = Column(Float, nullable=True)
+    sleep_mode = Column(Integer, nullable=True)
+    gnss_status = Column(Integer, nullable=True)
+    network_operator = Column(String, nullable=True)

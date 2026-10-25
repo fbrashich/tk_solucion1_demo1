@@ -112,6 +112,11 @@ class DeviceStatusResponse(BaseModel):
     last_updated: Optional[datetime] = None
     last_speed: Optional[float] = None
     raw_data: Optional[dict] = None
+    external_power: Optional[float] = None
+    internal_battery: Optional[float] = None
+    sleep_mode: Optional[int] = None
+    gnss_status: Optional[int] = None
+    network_operator: Optional[str] = None
 
 class FleetSummaryResponse(BaseModel):
     total_devices: int
@@ -132,6 +137,11 @@ class TelemetryEventResponse(BaseModel):
     altitude: Optional[float] = None
     course: Optional[float] = None
     raw_data: Optional[dict] = None
+    external_power: Optional[float] = None
+    internal_battery: Optional[float] = None
+    sleep_mode: Optional[int] = None
+    gnss_status: Optional[int] = None
+    network_operator: Optional[str] = None
 
     class Config:
         from_attributes = True

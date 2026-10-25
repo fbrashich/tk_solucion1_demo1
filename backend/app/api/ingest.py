@@ -10,6 +10,7 @@ from app.db import get_db
 from app.models.models import TelemetryEvent, DeviceState, Device, User
 from app.schemas.schemas import IngestPayload
 from app.services.live_stream import live_manager
+from app.services.fmc150_decoder import decode_fmc150_telemetry, sanitize_string_spaces, safe_coalesce
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -128,7 +129,8 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
                 )
                 default_operator_id = user_res.scalars().first()
 
-            dev_name = dev.get("name") or f"Dispositivo {clean_unique_id}"
+            raw_dev_name = dev.get("name") or pos.get("device_name") or f"Dispositivo {clean_unique_id}"
+            dev_name = sanitize_string_spaces(raw_dev_name)
             dev_model = dev.get("model") or "Teltonika"
             dev_type = "ATC700" if "atc" in dev_name.lower() or "atc" in dev_model.lower() else "Teltonika GPS"
 
@@ -147,6 +149,10 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             await db.flush()
             created_devices_count += 1
             logger.info(f"[TRACCAR INGEST] Auto-Discovery: Creado dispositivo {dev_name} ({clean_unique_id}) en PostgreSQL.")
+        elif local_device and local_device.name:
+            clean_name = sanitize_string_spaces(local_device.name)
+            if clean_name != local_device.name:
+                local_device.name = clean_name
 
         # C. Timestamp Real del GPS (fixTime prioritario)
         fix_time = parse_iso_datetime(pos.get("fixTime") or pos.get("deviceTime") or pos.get("serverTime"))
@@ -172,60 +178,59 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
         # Conversión de knots a km/h: 1 nudo = 1.852 km/h
         speed_kmh = round(speed_raw * 1.852, 2)
 
-        # F. Extracción de Parámetros Teltonika / IO Elements
-        # 1. Ignición (contacto/motor)
+        # F. Decodificación Exhaustiva de Parámetros Teltonika FMC150 (Etapa 1)
+        decoded_fmc = decode_fmc150_telemetry(attrs)
+
+        # 1. Ignición estricta (no confundir con movimiento simple)
         ignition = bool(
             attrs.get("ignition") is True or
             attrs.get("io239") == 1 or
-            attrs.get("io1") == 1 or
-            attrs.get("motion") is True
+            attrs.get("io1") == 1
         )
 
         # 2. Movimiento
-        motion = bool(attrs.get("motion") is True or attrs.get("io240") == 1)
+        motion = bool(
+            attrs.get("motion") is True or
+            attrs.get("io240") == 1 or
+            speed_kmh > 2.0
+        )
 
-        # 3. Voltaje de batería del vehículo (Power / ext_voltage / io66)
-        power_val: Optional[float] = None
-        if attrs.get("power") is not None:
-            power_val = round(float(attrs["power"]), 2)
-        elif attrs.get("ext_voltage") is not None:
-            power_val = round(float(attrs["ext_voltage"]), 2)
-        elif attrs.get("io66") is not None:
-            raw_mv = float(attrs["io66"])
-            power_val = round(raw_mv / 1000.0, 2) if raw_mv > 50 else round(raw_mv, 2)
-
-        # 4. Batería interna de respaldo (batteryLevel / battery / io67)
-        battery_val: Optional[float] = None
-        if attrs.get("batteryLevel") is not None:
-            battery_val = round(float(attrs["batteryLevel"]), 2)
-        elif attrs.get("battery") is not None:
-            battery_val = round(float(attrs["battery"]), 2)
-        elif attrs.get("io67") is not None:
-            raw_bat = float(attrs["io67"])
-            battery_val = round(raw_bat / 1000.0, 2) if raw_bat > 50 else round(raw_bat, 2)
-
-        # 5. Odómetro y Horómetro reportados
-        total_dist = attrs.get("totalDistance") or attrs.get("distance") or attrs.get("io16")
-        reported_hours = attrs.get("hours") or attrs.get("io243")
-
-        # 6. Calidad de señal (satélites y rssi)
-        sat = attrs.get("sat") or attrs.get("io21")
-        rssi = attrs.get("rssi") or attrs.get("io22")
+        # 3. Sensores decodificados (preservando valores falsy 0 / 0.0)
+        power_val = decoded_fmc["external_power"]
+        battery_val = decoded_fmc["internal_battery"]
+        sleep_mode = decoded_fmc["sleep_mode"]
+        sleep_mode_desc = decoded_fmc["sleep_mode_desc"]
+        gnss_status = decoded_fmc["gnss_status"]
+        gnss_status_desc = decoded_fmc["gnss_status_desc"]
+        operator_name = decoded_fmc["network_operator_name"]
+        operator_code = decoded_fmc["network_operator_code"]
+        sat = decoded_fmc["satellites"]
+        rssi = decoded_fmc["rssi"]
+        total_dist = decoded_fmc["total_distance_m"]
+        reported_odometer = decoded_fmc["reported_odometer_m"]
+        reported_hours = decoded_fmc["reported_hours"]
 
         # Construir payload enriquecido para raw_data conservando 100% de los datos
         enriched_raw = dict(pos)
         enriched_raw["speed_kmh"] = speed_kmh
         enriched_raw["device_uniqueId"] = clean_unique_id
-        enriched_raw["device_name"] = local_device.name
+        enriched_raw["device_name"] = sanitize_string_spaces(local_device.name)
         enriched_raw["normalized"] = {
             "ignition": ignition,
             "motion": motion,
             "power": power_val,
             "battery": battery_val,
             "totalDistance": total_dist,
+            "odometer": reported_odometer,
             "hours": reported_hours,
             "sat": sat,
             "rssi": rssi,
+            "sleep_mode": sleep_mode,
+            "sleep_mode_desc": sleep_mode_desc,
+            "gnss_status": gnss_status,
+            "gnss_status_desc": gnss_status_desc,
+            "network_operator": operator_name,
+            "operator_code": operator_code,
             "serverTime": server_time_str
         }
 
@@ -262,7 +267,12 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             altitude=altitude,
             course=course,
             timestamp=fix_time,
-            raw_data=enriched_raw
+            raw_data=enriched_raw,
+            external_power=power_val,
+            internal_battery=battery_val,
+            sleep_mode=sleep_mode,
+            gnss_status=gnss_status,
+            network_operator=operator_name
         )
         db.add(new_event)
 
@@ -277,7 +287,12 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
                 last_latitude=lat,
                 last_longitude=lon,
                 last_speed=speed_kmh,
-                last_raw_data=enriched_raw
+                last_raw_data=enriched_raw,
+                external_power=power_val,
+                internal_battery=battery_val,
+                sleep_mode=sleep_mode,
+                gnss_status=gnss_status,
+                network_operator=operator_name
             )
             db.add(device_state)
         elif is_newer:
@@ -293,8 +308,19 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             device_state.last_longitude = lon
             device_state.last_speed = speed_kmh
             device_state.last_raw_data = enriched_raw
+            device_state.external_power = power_val
+            device_state.internal_battery = battery_val
+            device_state.sleep_mode = sleep_mode
+            device_state.gnss_status = gnss_status
+            device_state.network_operator = operator_name
 
         processed_count += 1
+
+        # Formatear strings limpios para Live Stream (sin bug falsy)
+        bat_str = f"{battery_val:.2f}V" if battery_val is not None else "N/A"
+        power_str = f"{power_val:.2f}V" if power_val is not None else "N/A"
+        sat_str = str(sat) if sat is not None else "0"
+        red_str = operator_name or "N/A"
 
         # Emitir al Live Stream en tiempo real
         try:
@@ -305,7 +331,7 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
                 "channel": str(pos.get("protocol", "teltonika")).upper(),
                 "socket_id": "FORWARDER",
                 "imei": clean_unique_id,
-                "message": f"Posición {local_device.name} ({clean_unique_id}): Lat={lat:.5f}, Lon={lon:.5f}, Vel={speed_kmh} km/h, Bat={battery_val or 'N/A'}",
+                "message": f"Posición {local_device.name} ({clean_unique_id}): Lat={lat:.5f}, Lon={lon:.5f}, Vel={speed_kmh} km/h, Bat={bat_str}, Power={power_str}, Sat={sat_str}, Red={red_str}",
                 "details": {
                     "device_id": local_device.device_id,
                     "device_name": local_device.name,
@@ -317,9 +343,16 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
                     "motion": motion,
                     "power_voltage": power_val,
                     "battery_voltage": battery_val,
+                    "external_power": power_val,
+                    "internal_battery": battery_val,
+                    "sleep_mode": sleep_mode,
+                    "sleep_mode_desc": sleep_mode_desc,
+                    "gnss_status": gnss_status,
+                    "gnss_status_desc": gnss_status_desc,
+                    "network_operator": operator_name,
                     "satellites": sat,
                     "signal_rssi": rssi,
-                    "total_distance_km": round(total_dist / 1000.0, 1) if total_dist else None,
+                    "total_distance_km": round(total_dist / 1000.0, 1) if total_dist is not None else None,
                     "engine_hours": round(device_state.engine_hours, 2) if device_state else 0.0,
                     "protocol": pos.get("protocol", "teltonika")
                 },

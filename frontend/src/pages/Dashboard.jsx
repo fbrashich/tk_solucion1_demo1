@@ -20,7 +20,7 @@ import {
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
   Trash2, X, Smartphone, Satellite, Info, HardDrive,
-  Battery, Signal, Code, Pencil, Settings
+  Battery, Signal, Code, Pencil, Settings, Zap
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -706,32 +706,51 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Batería Interna */}
+              {/* Batería Principal Vehículo (12V) */}
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                  <Battery className="w-4 h-4" />
+                <div className={`p-2 rounded-xl ${
+                  (singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? 0) >= 12.0
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                    : (singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power) != null
+                    ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                }`}>
+                  <Zap className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Batería GPS</span>
-                  <span className="font-mono font-bold text-emerald-300 text-sm">
-                    {singleStatus.raw_data?.attributes?.battery 
-                      ? `${Number(singleStatus.raw_data.attributes.battery).toFixed(2)} V` 
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Batería 12V</span>
+                  <span className="font-mono font-bold text-white text-sm">
+                    {(singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? singleStatus.raw_data?.attributes?.power) != null
+                      ? `${Number(singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? singleStatus.raw_data?.attributes?.power).toFixed(2)} V`
                       : 'N/A'}
                   </span>
                 </div>
               </div>
 
-              {/* Señal Celular (RSSI) */}
+              {/* Batería Interna GPS */}
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                  <Battery className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Batería GPS</span>
+                  <span className="font-mono font-bold text-blue-300 text-sm">
+                    {(singleStatus.internal_battery ?? singleStatus.raw_data?.normalized?.battery ?? singleStatus.raw_data?.attributes?.battery) != null
+                      ? `${Number(singleStatus.internal_battery ?? singleStatus.raw_data?.normalized?.battery ?? singleStatus.raw_data?.attributes?.battery).toFixed(2)} V`
+                      : 'N/A'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Red Celular / Operador */}
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
                   <Signal className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Señal GSM</span>
-                  <span className="font-mono font-bold text-purple-300 text-sm">
-                    {singleStatus.raw_data?.attributes?.rssi != null 
-                      ? `${singleStatus.raw_data.attributes.rssi} / 5` 
-                      : 'N/A'}
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Red Celular</span>
+                  <span className="font-mono font-bold text-purple-300 text-sm truncate max-w-[120px]" title={singleStatus.network_operator ?? singleStatus.raw_data?.normalized?.network_operator ?? ''}>
+                    {singleStatus.network_operator ?? singleStatus.raw_data?.normalized?.network_operator ?? (singleStatus.raw_data?.attributes?.rssi != null ? `GSM (${singleStatus.raw_data.attributes.rssi}/5)` : 'N/A')}
                   </span>
                 </div>
               </div>
@@ -744,21 +763,38 @@ export default function Dashboard() {
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Satélites</span>
                   <span className="font-mono font-bold text-amber-300 text-sm">
-                    {singleStatus.raw_data?.attributes?.sat ?? '0 fijados'}
+                    {(singleStatus.raw_data?.normalized?.sat ?? singleStatus.raw_data?.attributes?.sat) != null
+                      ? `${singleStatus.raw_data?.normalized?.sat ?? singleStatus.raw_data?.attributes?.sat} fijados`
+                      : '0 fijados'}
                   </span>
                 </div>
               </div>
 
-              {/* Odómetro / Distancia Total */}
-              {singleStatus.raw_data?.attributes?.totalDistance != null && (
+              {/* Modo de Reposo (Sleep Mode FMC150) */}
+              {singleStatus.raw_data?.normalized?.sleep_mode_desc && (
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <Radio className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Modo Reposo</span>
+                    <span className="font-mono font-bold text-indigo-300 text-sm">
+                      {singleStatus.raw_data.normalized.sleep_mode_desc}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Odómetro / Distancia Total */}
+              {(singleStatus.raw_data?.normalized?.totalDistance ?? singleStatus.raw_data?.attributes?.totalDistance) != null && (
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
                     <Compass className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Odómetro</span>
-                    <span className="font-mono font-bold text-blue-300 text-sm">
-                      {(Number(singleStatus.raw_data.attributes.totalDistance) / 1000).toFixed(1)} <span className="text-xs text-slate-400 font-normal">km</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Odómetro GPS</span>
+                    <span className="font-mono font-bold text-cyan-300 text-sm">
+                      {(Number(singleStatus.raw_data?.normalized?.totalDistance ?? singleStatus.raw_data.attributes.totalDistance) / 1000).toFixed(1)} <span className="text-xs text-slate-400 font-normal">km</span>
                     </span>
                   </div>
                 </div>
