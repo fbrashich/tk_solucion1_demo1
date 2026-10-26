@@ -495,25 +495,7 @@ export default function Dashboard() {
     if (lat && lon) setSelectedMapCenter([lat, lon]);
   };
 
-  if (loading && !fleetSummary && !singleStatus) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 p-4">
-        <div className="w-14 h-14 border-4 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin mb-4" />
-        <h2 className="text-base font-bold text-white tracking-wide">Conectando con la Flota de Telemetría...</h2>
-        <p className="text-xs text-slate-400 mt-1">Cargando dispositivos para {user?.username || 'Operador'}</p>
-      </div>
-    );
-  }
-
-  // Coordenadas iniciales para el mapa
-  const defaultPos = [-31.53, -68.52];
-  const mapCenterPos = selectedMapCenter || (
-    !isFleetView && singleStatus?.last_lat && singleStatus?.last_lon 
-      ? [singleStatus.last_lat, singleStatus.last_lon] 
-      : defaultPos
-  );
-
-  // Coordenadas estables del dispositivo activo para el modal de geocercas
+  // Coordenadas estables del dispositivo activo para el modal de geocercas (declarado incondicionalmente antes de retornos tempranos)
   const activeDeviceCoords = useMemo(() => {
     if (isFleetView) return null;
     if (singleStatus?.last_lat && singleStatus?.last_lon) {
@@ -536,6 +518,24 @@ export default function Dashboard() {
     currentDeviceObj?.last_lat,
     currentDeviceObj?.last_lon
   ]);
+
+  if (loading && !fleetSummary && !singleStatus) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 p-4">
+        <div className="w-14 h-14 border-4 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin mb-4" />
+        <h2 className="text-base font-bold text-white tracking-wide">Conectando con la Flota de Telemetría...</h2>
+        <p className="text-xs text-slate-400 mt-1">Cargando dispositivos para {user?.username || 'Operador'}</p>
+      </div>
+    );
+  }
+
+  // Coordenadas iniciales para el mapa
+  const defaultPos = [-31.53, -68.52];
+  const mapCenterPos = selectedMapCenter || (
+    !isFleetView && singleStatus?.last_lat && singleStatus?.last_lon 
+      ? [singleStatus.last_lat, singleStatus.last_lon] 
+      : defaultPos
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">

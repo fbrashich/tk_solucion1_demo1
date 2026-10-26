@@ -182,6 +182,34 @@ export default function GeofenceManagerModal({
   const [ipLoading, setIpLoading] = useState(false);
   const [recenterTrigger, setRecenterTrigger] = useState(0);
 
+  // Centro de mapa calculado según los requerimientos (declarado incondicionalmente a nivel superior)
+  const hasDevicePos = !isFleetView && devicePosition && devicePosition[0] != null && devicePosition[1] != null && !isNaN(devicePosition[0]);
+  const hasIpLocation = isFleetView && ipLocation && ipLocation.lat != null && ipLocation.lon != null;
+
+  const defaultCenter = useMemo(() => {
+    if (hasDevicePos) {
+      return [Number(devicePosition[0]), Number(devicePosition[1])];
+    }
+    if (hasIpLocation) {
+      return [Number(ipLocation.lat), Number(ipLocation.lon)];
+    }
+    if (geofences.length > 0 && geofences[0].center_lat && geofences[0].center_lon) {
+      return [Number(geofences[0].center_lat), Number(geofences[0].center_lon)];
+    }
+    return [-34.6037, -58.3816];
+  }, [
+    hasDevicePos,
+    devicePosition?.[0],
+    devicePosition?.[1],
+    hasIpLocation,
+    ipLocation?.lat,
+    ipLocation?.lon,
+    geofences
+  ]);
+
+  const defaultZoom = hasDevicePos ? 15 : (hasIpLocation ? 13 : 12);
+  const isDrawingStarted = (formType === 'POLYGON' && polygonVertices.length > 0) || (formType === 'CIRCLE' && circleCenter !== null);
+
   // Cargar geocercas y resolver geolocalización al abrir
   useEffect(() => {
     if (isOpen) {
@@ -339,37 +367,6 @@ export default function GeofenceManagerModal({
   };
 
   if (!isOpen) return null;
-
-  // Centro de mapa calculado según los requerimientos:
-  // 1. Si un dispositivo es el que se está visualizando: mostrar la posición de ese dispositivo por default.
-  // 2. Si se visualiza la flota completa: posicionar por IP del usuario conectado de manera aproximada.
-  // 3. Fallback: primera geocerca configurada o Buenos Aires / San Juan.
-  const hasDevicePos = !isFleetView && devicePosition && devicePosition[0] != null && devicePosition[1] != null && !isNaN(devicePosition[0]);
-  const hasIpLocation = isFleetView && ipLocation && ipLocation.lat != null && ipLocation.lon != null;
-
-  const defaultCenter = useMemo(() => {
-    if (hasDevicePos) {
-      return [Number(devicePosition[0]), Number(devicePosition[1])];
-    }
-    if (hasIpLocation) {
-      return [Number(ipLocation.lat), Number(ipLocation.lon)];
-    }
-    if (geofences.length > 0 && geofences[0].center_lat && geofences[0].center_lon) {
-      return [Number(geofences[0].center_lat), Number(geofences[0].center_lon)];
-    }
-    return [-34.6037, -58.3816];
-  }, [
-    hasDevicePos,
-    devicePosition?.[0],
-    devicePosition?.[1],
-    hasIpLocation,
-    ipLocation?.lat,
-    ipLocation?.lon,
-    geofences
-  ]);
-
-  const defaultZoom = hasDevicePos ? 15 : (hasIpLocation ? 13 : 12);
-  const isDrawingStarted = (formType === 'POLYGON' && polygonVertices.length > 0) || (formType === 'CIRCLE' && circleCenter !== null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
