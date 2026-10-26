@@ -41,6 +41,9 @@ Este documento audita y certifica la implementación de los Sprints técnicos y 
   - Diseñador visual con Leaflet: clic sobre el mapa para fijar centro y regular radio (círculo) o colocar vértices con opción de deshacer (polígono).
   - Visualización en tiempo real de las geocercas activas sobre el mapa principal del Dashboard con colores personalizados y popups informativos.
   - Botón con contador de geocercas activas en la barra de navegación.
+  - **Comportamiento de Posicionamiento Inteligente del Mapa al Crear Geocerca:**
+    - **Modo Dispositivo Individual:** Al abrir el diseñador con un vehículo seleccionado (ej: *Van Operarios*), el mapa centra automáticamente sobre las coordenadas GPS del dispositivo con zoom 15, marcador con pulso radar cian, HUD con nombre/coordenadas y botón *"Fijar centro en vehículo"*.
+    - **Modo Flota Completa:** Al abrir el diseñador con *"Toda la Flota"* seleccionada, el mapa detecta y posiciona automáticamente en la ubicación geográfica aproximada de la IP pública del usuario conectado (vía `/api/client-ip-location` / `ipwho.is`), fijando el centro en la ciudad/región del usuario (ej: Olivos / Buenos Aires), marcador de brújula azul con halo pulsante, HUD *"Flota Completa • Ubicación IP: <Ciudad>"*, y botón *"Fijar centro en tu ubicación IP"*.
   - **Tarjeta Dinámica 'Zona Operativa':**
     - En la vista global de flota (`isFleetView` / todos los dispositivos simultáneos), la tarjeta se oculta completamente del DOM y la grilla de métricas se adapta automáticamente a 3 columnas (`lg:grid-cols-3`).
     - En la vista de dispositivo individual, la tarjeta reporta en tiempo real el nombre de la zona operativa en la que se ubica la unidad (evaluada geométricamente mediante Ray-Casting y Haversine), su indicador visual de color y estado *"Dentro de zona"*, o bien *"Fuera de Zona Delimitada"* con opción directa de centrado en mapa.
@@ -94,4 +97,6 @@ Se ejecutó la suite consolidada de pruebas unitarias sobre el backend:
   - Botón **`+ Geocercas`** visible en el encabezado de la tarjeta del mapa (`Mapa de Toda la Flota`).
   - Tarjeta *"Zona Operativa"* correctamente oculta en la vista global (`Toda la Flota`) según especificación.
   - Apertura y renderizado completo del modal *"Gestor de Geocercas Inteligentes"* con diseñador Leaflet sin marcas de agua.
+  - **Centrado Automático por Vehículo Verificado:** Al seleccionar *Van Operarios* (`FMC150_331`), el modal centra en sus coordenadas exactas (`-34.5496, -58.4948`), zoom 15, con marcador cian de radar y HUD contextual.
+  - **Centrado Automático por IP del Usuario Verificado:** Al seleccionar *Toda la Flota*, el modal consulta la IP pública del usuario (`190.225.66.150`), centrando en su ubicación aproximada (Olivos / Buenos Aires, `-34.5087, -58.4802`), zoom 13, con marcador de brújula azul y HUD informativo.
 
