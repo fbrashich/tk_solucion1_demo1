@@ -99,6 +99,67 @@ const createStatusMarkerIcon = (statusStr, isSelected = false) => {
   });
 };
 
+// Distancia geodésica ortodrómica en metros (WGS84 Haversine)
+function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000.0;
+  const phi1 = (lat1 * Math.PI) / 180.0;
+  const phi2 = (lat2 * Math.PI) / 180.0;
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180.0;
+  const deltaLambda = ((lon2 - lon1) * Math.PI) / 180.0;
+
+  const a = Math.sin(deltaPhi / 2.0) ** 2 +
+            Math.cos(phi1) * Math.cos(phi2) * (Math.sin(deltaLambda / 2.0) ** 2);
+  const c = 2.0 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a));
+  return R * c;
+}
+
+// Algoritmo de Trazado de Rayos (Ray-Casting) para contención en polígonos arbitrarios
+function isPointInPolygon(lat, lon, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  const n = polygon.length;
+  
+  const getLat = (pt) => (Array.isArray(pt) ? pt[0] : (pt?.lat ?? pt?.latitude));
+  const getLon = (pt) => (Array.isArray(pt) ? pt[1] : (pt?.lon ?? pt?.lng ?? pt?.longitude));
+
+  let p1_lat = getLat(polygon[0]);
+  let p1_lon = getLon(polygon[0]);
+
+  for (let i = 1; i <= n; i++) {
+    const p2 = polygon[i % n];
+    const p2_lat = getLat(p2);
+    const p2_lon = getLon(p2);
+
+    if (Math.min(p1_lat, p2_lat) < lat && lat <= Math.max(p1_lat, p2_lat)) {
+      if (lon <= Math.max(p1_lon, p2_lon)) {
+        let x_inters = p1_lon;
+        if (p1_lat !== p2_lat) {
+          x_inters = (lat - p1_lat) * (p2_lon - p1_lon) / (p2_lat - p1_lat) + p1_lon;
+        }
+        if (p1_lon === p2_lon || lon <= x_inters) {
+          inside = !inside;
+        }
+      }
+    }
+    p1_lat = p2_lat;
+    p1_lon = p2_lon;
+  }
+  return inside;
+}
+
+// Determina si una coordenada se encuentra dentro de una geocerca circular o poligonal
+function isPointInGeofence(lat, lon, gf) {
+  if (lat == null || lon == null || !gf) return false;
+  if (gf.type === 'CIRCLE') {
+    if (gf.center_lat == null || gf.center_lon == null) return false;
+    const dist = haversineDistanceMeters(lat, lon, gf.center_lat, gf.center_lon);
+    return dist <= (gf.radius_meters || 200);
+  } else if (gf.type === 'POLYGON') {
+    return isPointInPolygon(lat, lon, gf.polygon_vertices);
+  }
+  return false;
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const { isLight } = useTheme();
@@ -404,6 +465,12 @@ export default function Dashboard() {
     : (singleStatus?.calibrated_odometer_km ?? (
         ((singleStatus?.raw_data?.normalized?.totalDistance || singleStatus?.raw_data?.attributes?.totalDistance || 0) / 1000)
       ));
+
+  // Geocerca(s) operativas activas donde se encuentra el dispositivo seleccionado en tiempo real
+  const matchingGeofences = (!isFleetView && singleStatus?.last_lat && singleStatus?.last_lon)
+    ? activeGeofences.filter(gf => isPointInGeofence(singleStatus.last_lat, singleStatus.last_lon, gf))
+    : [];
+  const currentGeofence = matchingGeofences.length > 0 ? matchingGeofences[0] : null;
 
   // Trayectoria GPS para dispositivo individual
   const trajectoryPoints = (!isFleetView ? logs : [])
@@ -967,8 +1034,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Tarjetas de Métricas Clave */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Tarjetas de Métricas Clave (3 en vista de flota, 4 en vista de dispositivo individual) */}
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isFleetView ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4`}>
           
           {/* Card 1: ESTADO OPERATIVO (Etapa 2: 5 Estados de Negocio) */}
           <div className={`relative overflow-hidden rounded-2xl border p-5 shadow-xl transition-all ${
@@ -1135,49 +1202,97 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Card 4: UBICACIÓN Y GEO */}
-          <div className="relative overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-800 p-5 shadow-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-                  {isFleetView ? 'Zona Operativa' : 'Ubicación GPS'}
-                </p>
-                <div className="text-sm font-bold text-slate-100 flex items-center gap-1">
-                  <MapPin className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <span className="truncate max-w-[200px]" title={singleStatus?.raw_data?.address || ''}>
-                    {!isFleetView && singleStatus?.raw_data?.address 
-                      ? singleStatus.raw_data.address 
-                      : (!isFleetView && singleStatus?.last_lat && singleStatus.last_lat < -33 ? 'Buenos Aires, Argentina' : 'San Juan, Argentina')}
-                  </span>
+          {/* Card 4: ZONA OPERATIVA (Solo visible cuando se visualiza un dispositivo individual) */}
+          {!isFleetView && (
+            <div className="relative overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-800 p-5 shadow-xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1">
+                    Zona Operativa
+                  </p>
+                  
+                  {currentGeofence ? (
+                    <>
+                      <div className="text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm animate-pulse" 
+                          style={{ backgroundColor: currentGeofence.color || '#06b6d4' }} 
+                        />
+                        <span className="truncate max-w-[200px]" title={matchingGeofences.map(g => g.name).join(', ')}>
+                          {currentGeofence.name}
+                          {matchingGeofences.length > 1 && (
+                            <span className="text-[10px] text-cyan-400 font-normal ml-1">
+                              (+{matchingGeofences.length - 1})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1 font-medium flex items-center gap-1.5 flex-wrap">
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Dentro de zona</span>
+                        </span>
+                        {currentGeofence.speed_limit_kmh && (
+                          <span className="text-amber-400/90 font-mono text-[11px]">
+                            • Máx {currentGeofence.speed_limit_kmh} km/h
+                          </span>
+                        )}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-amber-400/80 shrink-0" />
+                        <span className="truncate max-w-[200px]" title={singleStatus?.raw_data?.address || 'Fuera de zona delimitada'}>
+                          {singleStatus?.raw_data?.address || (singleStatus?.last_lat ? 'Fuera de Zona Delimitada' : 'Sin señal GPS')}
+                        </span>
+                      </div>
+                      <p className="text-xs font-mono text-slate-400 mt-1">
+                        {singleStatus?.last_lat && singleStatus?.last_lon 
+                          ? `${singleStatus.last_lat.toFixed(4)}, ${singleStatus.last_lon.toFixed(4)}` 
+                          : 'Sin coordenadas disponibles'}
+                      </p>
+                    </>
+                  )}
                 </div>
-                <p className="text-xs font-mono text-slate-400 mt-1">
-                  {!isFleetView && singleStatus?.last_lat 
-                    ? `${singleStatus.last_lat.toFixed(4)}, ${singleStatus.last_lon.toFixed(4)}` 
-                    : `${fleetSummary?.devices?.length || 0} balizas activas`}
-                </p>
+
+                <div 
+                  className={`p-3.5 rounded-2xl border shadow-inner flex items-center justify-center transition-all ${
+                    currentGeofence 
+                      ? 'shadow-lg' 
+                      : 'bg-slate-800/60 border-slate-700/60 text-slate-400'
+                  }`}
+                  style={currentGeofence ? {
+                    backgroundColor: `${currentGeofence.color || '#06b6d4'}20`,
+                    borderColor: `${currentGeofence.color || '#06b6d4'}50`,
+                    color: currentGeofence.color || '#06b6d4'
+                  } : {}}
+                >
+                  {currentGeofence ? <ShieldCheck className="w-7 h-7" /> : <Navigation className="w-7 h-7" />}
+                </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                <Navigation className="w-7 h-7" />
+              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                <span className="text-slate-400 truncate max-w-[160px]" title={currentGeofence?.description || (currentGeofence ? currentGeofence.name : 'Sin geocerca activa')}>
+                  {currentGeofence 
+                    ? (currentGeofence.description || (currentGeofence.type === 'CIRCLE' ? `Radio: ${currentGeofence.radius_meters || 200}m` : 'Perímetro Poligonal'))
+                    : <span className="text-amber-400/80 font-medium">Fuera de geocerca</span>}
+                </span>
+                <button
+                  onClick={() => {
+                    if (singleStatus?.last_lat && singleStatus?.last_lon) {
+                      centerOnEvent(singleStatus.last_lat, singleStatus.last_lon);
+                    }
+                  }}
+                  className="text-cyan-400 hover:text-cyan-300 font-bold hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+                  title="Centrar mapa en la posición del vehículo"
+                >
+                  <Navigation className="w-3 h-3" />
+                  <span>Centrar en Mapa</span>
+                </button>
               </div>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-              <span className="text-slate-400">Visualización:</span>
-              <button
-                onClick={() => {
-                  if (!isFleetView && singleStatus?.last_lat) {
-                    centerOnEvent(singleStatus.last_lat, singleStatus.last_lon);
-                  } else if (fleetSummary?.devices?.[0]?.last_lat) {
-                    centerOnEvent(fleetSummary.devices[0].last_lat, fleetSummary.devices[0].last_lon);
-                  }
-                }}
-                className="text-cyan-400 hover:text-cyan-300 font-bold cursor-pointer"
-              >
-                Centrar en Mapa
-              </button>
-            </div>
-          </div>
+          )}
 
         </div>
 

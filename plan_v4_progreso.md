@@ -41,6 +41,9 @@ Este documento audita y certifica la implementación de los Sprints técnicos y 
   - Diseñador visual con Leaflet: clic sobre el mapa para fijar centro y regular radio (círculo) o colocar vértices con opción de deshacer (polígono).
   - Visualización en tiempo real de las geocercas activas sobre el mapa principal del Dashboard con colores personalizados y popups informativos.
   - Botón con contador de geocercas activas en la barra de navegación.
+  - **Tarjeta Dinámica 'Zona Operativa':**
+    - En la vista global de flota (`isFleetView` / todos los dispositivos simultáneos), la tarjeta se oculta completamente del DOM y la grilla de métricas se adapta automáticamente a 3 columnas (`lg:grid-cols-3`).
+    - En la vista de dispositivo individual, la tarjeta reporta en tiempo real el nombre de la zona operativa en la que se ubica la unidad (evaluada geométricamente mediante Ray-Casting y Haversine), su indicador visual de color y estado *"Dentro de zona"*, o bien *"Fuera de Zona Delimitada"* con opción directa de centrado en mapa.
 
 ### 1.2 Despachador Multicanal de Alertas a Telegram ([`notification_dispatcher.py`](file:///d:/TK_DEMO1/tk_solucion1_demo1/backend/app/services/notification_dispatcher.py))
 * Integración directa con **Telegram Bot API** (`https://api.telegram.org/bot<token>/sendMessage`).
