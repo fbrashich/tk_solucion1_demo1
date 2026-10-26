@@ -1,6 +1,6 @@
 import re
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
 class Token(BaseModel):
