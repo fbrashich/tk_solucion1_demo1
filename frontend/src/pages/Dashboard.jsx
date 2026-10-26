@@ -2373,6 +2373,16 @@ export default function Dashboard() {
           fetchAllData(true);
         }}
         deviceList={deviceList}
+        isFleetView={isFleetView}
+        selectedDevice={currentDeviceObj}
+        devicePosition={
+          !isFleetView && singleStatus?.last_lat && singleStatus?.last_lon
+            ? [Number(singleStatus.last_lat), Number(singleStatus.last_lon)]
+            : (!isFleetView && currentDeviceObj?.last_lat && currentDeviceObj?.last_lon)
+              ? [Number(currentDeviceObj.last_lat), Number(currentDeviceObj.last_lon)]
+              : null
+        }
+        deviceName={currentDeviceObj?.name || singleStatus?.name || (selectedDeviceId !== 'all' ? selectedDeviceId : '')}
       />
 
       {/* Footer Industrial con Versión SemVer y Trazabilidad del Producto */}

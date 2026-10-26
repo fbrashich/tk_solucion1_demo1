@@ -271,7 +271,44 @@ export const getSystemVersion = async () => {
   return response.data;
 };
 
+export const getClientIpLocation = async () => {
+  // 1. Consulta directa cliente a ipwho.is (CORS habilitado)
+  try {
+    const res = await fetch('https://ipwho.is/', { signal: AbortSignal.timeout(2500) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.latitude && data.longitude) {
+        return {
+          latitude: data.latitude,
+          longitude: data.longitude,
+          city: data.city || data.region || 'Ubicación detectada',
+          ip: data.ip,
+          source: 'ipwhois_direct'
+        };
+      }
+    }
+  } catch {
+    // Continuar al fallback
+  }
+
+  // 2. Fallback al endpoint interno del backend
+  try {
+    const response = await api.get('/client-ip-location', { timeout: 3000 });
+    return response.data;
+  } catch {
+    // 3. Fallback geográfico
+    return {
+      latitude: -34.6037,
+      longitude: -58.3816,
+      city: 'Buenos Aires (Aprox.)',
+      ip: 'Local',
+      source: 'fallback'
+    };
+  }
+};
+
 export default api;
+
 
 
 
