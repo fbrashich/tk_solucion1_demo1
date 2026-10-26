@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   MapPin, X, Plus, Trash2, Shield, CircleDot, 
   Layers, Clock, AlertTriangle, RefreshCw, Eye, 
@@ -38,18 +38,72 @@ function MapDrawingHandler({ drawingType, onMapClick }) {
   return null;
 }
 
-// Re-centrado reactivo del mapa modal y ajuste de dimensiones
-function RecenterModalMap({ center, zoom, trigger }) {
+// Re-centrado inteligente del mapa modal:
+// 1. Centra ÚNICAMENTE al momento de cargar / abrir la creación de la geocerca.
+// 2. Si es vista de flota y la IP se resuelve de forma asíncrona poco después de abrir, centra una sola vez en la IP (siempre que el usuario no haya comenzado a dibujar).
+// 3. Una vez centrado inicialmente, NO vuelve a forzar setView ante re-renders, movimientos de mapa, colocación de vértices, sliders o telemetría.
+// 4. Permite centrado manual a demanda si el usuario hace clic en [Centrar] o en fijar centro.
+function RecenterModalMap({
+  targetCenter,
+  targetZoom,
+  manualTrigger,
+  activeTab,
+  isFleetView,
+  hasDevicePos,
+  isDrawingStarted
+}) {
   const map = useMap();
+  const hasInitialCenteredRef = useRef(false);
+  const lastActiveTabRef = useRef(activeTab);
+  const hasIpCenteredRef = useRef(!isFleetView || hasDevicePos);
+
+  // Invalidate size on initial mount and when tab changes so Leaflet recalculates container dimensions
   useEffect(() => {
-    if (center && center[0] != null && center[1] != null && !isNaN(center[0]) && !isNaN(center[1])) {
-      map.setView(center, zoom || 14, { animate: true });
-    }
     const timer = setTimeout(() => {
       map.invalidateSize();
     }, 200);
     return () => clearTimeout(timer);
-  }, [center, zoom, trigger, map]);
+  }, [map, activeTab]);
+
+  // Centrado inicial: ÚNICAMENTE al cargar o al ingresar a la pestaña de creación
+  useEffect(() => {
+    if (!targetCenter || targetCenter[0] == null || targetCenter[1] == null || isNaN(targetCenter[0])) {
+      return;
+    }
+
+    const isEnteringCreateTab = activeTab === 'create' && lastActiveTabRef.current !== 'create';
+    lastActiveTabRef.current = activeTab;
+
+    if (!hasInitialCenteredRef.current || isEnteringCreateTab) {
+      map.setView(targetCenter, targetZoom || 14, { animate: false });
+      hasInitialCenteredRef.current = true;
+    }
+  }, [targetCenter?.[0], targetCenter?.[1], activeTab, map]);
+
+  // Si la geolocalización por IP se completa tras el montaje inicial en vista de flota, centrar UNA SOLA VEZ
+  useEffect(() => {
+    if (
+      isFleetView &&
+      !hasDevicePos &&
+      !hasIpCenteredRef.current &&
+      !isDrawingStarted &&
+      targetCenter &&
+      targetCenter[0] != null &&
+      !isNaN(targetCenter[0])
+    ) {
+      map.setView(targetCenter, targetZoom || 13, { animate: true });
+      hasIpCenteredRef.current = true;
+      hasInitialCenteredRef.current = true;
+    }
+  }, [targetCenter?.[0], targetCenter?.[1], targetZoom, isFleetView, hasDevicePos, isDrawingStarted, map]);
+
+  // Re-centrado manual explícito: SOLO cuando el usuario pulsa [Centrar] o un botón de anclaje rápido
+  useEffect(() => {
+    if (manualTrigger > 0 && targetCenter && targetCenter[0] != null && !isNaN(targetCenter[0])) {
+      map.setView(targetCenter, targetZoom || 14, { animate: true });
+    }
+  }, [manualTrigger]);
+
   return null;
 }
 
@@ -293,15 +347,29 @@ export default function GeofenceManagerModal({
   const hasDevicePos = !isFleetView && devicePosition && devicePosition[0] != null && devicePosition[1] != null && !isNaN(devicePosition[0]);
   const hasIpLocation = isFleetView && ipLocation && ipLocation.lat != null && ipLocation.lon != null;
 
-  const defaultCenter = hasDevicePos
-    ? [Number(devicePosition[0]), Number(devicePosition[1])]
-    : hasIpLocation
-      ? [Number(ipLocation.lat), Number(ipLocation.lon)]
-      : (geofences.length > 0 && geofences[0].center_lat && geofences[0].center_lon)
-        ? [geofences[0].center_lat, geofences[0].center_lon]
-        : [-34.6037, -58.3816];
+  const defaultCenter = useMemo(() => {
+    if (hasDevicePos) {
+      return [Number(devicePosition[0]), Number(devicePosition[1])];
+    }
+    if (hasIpLocation) {
+      return [Number(ipLocation.lat), Number(ipLocation.lon)];
+    }
+    if (geofences.length > 0 && geofences[0].center_lat && geofences[0].center_lon) {
+      return [Number(geofences[0].center_lat), Number(geofences[0].center_lon)];
+    }
+    return [-34.6037, -58.3816];
+  }, [
+    hasDevicePos,
+    devicePosition?.[0],
+    devicePosition?.[1],
+    hasIpLocation,
+    ipLocation?.lat,
+    ipLocation?.lon,
+    geofences
+  ]);
 
   const defaultZoom = hasDevicePos ? 15 : (hasIpLocation ? 13 : 12);
+  const isDrawingStarted = (formType === 'POLYGON' && polygonVertices.length > 0) || (formType === 'CIRCLE' && circleCenter !== null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
@@ -576,7 +644,10 @@ export default function GeofenceManagerModal({
                     {hasDevicePos && (
                       <button
                         type="button"
-                        onClick={() => setCircleCenter([Number(devicePosition[0]), Number(devicePosition[1])])}
+                        onClick={() => {
+                          setCircleCenter([Number(devicePosition[0]), Number(devicePosition[1])]);
+                          setRecenterTrigger(prev => prev + 1);
+                        }}
                         className="w-full py-1.5 px-2.5 rounded-lg bg-cyan-950/70 border border-cyan-500/40 hover:bg-cyan-900/60 text-cyan-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Car className="w-3.5 h-3.5 text-cyan-400" />
@@ -586,7 +657,10 @@ export default function GeofenceManagerModal({
                     {hasIpLocation && (
                       <button
                         type="button"
-                        onClick={() => setCircleCenter([Number(ipLocation.lat), Number(ipLocation.lon)])}
+                        onClick={() => {
+                          setCircleCenter([Number(ipLocation.lat), Number(ipLocation.lon)]);
+                          setRecenterTrigger(prev => prev + 1);
+                        }}
                         className="w-full py-1.5 px-2.5 rounded-lg bg-blue-950/70 border border-blue-500/40 hover:bg-blue-900/60 text-blue-300 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <Globe className="w-3.5 h-3.5 text-blue-400" />
@@ -732,9 +806,13 @@ export default function GeofenceManagerModal({
               className="z-0"
             >
               <RecenterModalMap
-                center={defaultCenter}
-                zoom={defaultZoom}
-                trigger={recenterTrigger}
+                targetCenter={defaultCenter}
+                targetZoom={defaultZoom}
+                manualTrigger={recenterTrigger}
+                activeTab={activeTab}
+                isFleetView={isFleetView}
+                hasDevicePos={hasDevicePos}
+                isDrawingStarted={isDrawingStarted}
               />
 
               <TileLayer
@@ -750,13 +828,13 @@ export default function GeofenceManagerModal({
 
               {/* Marcador del Vehículo Seleccionado (Posición por defecto al visualizar dispositivo) */}
               {hasDevicePos && (
-                <Marker position={defaultCenter} icon={vehicleMarkerIcon}>
+                <Marker position={[Number(devicePosition[0]), Number(devicePosition[1])]} icon={vehicleMarkerIcon}>
                   <Popup>
                     <div className="text-xs space-y-1">
                       <strong className="block text-slate-900 font-bold">🚗 {deviceName || 'Vehículo Activo'}</strong>
                       <p className="text-slate-600">Posición actual reportada por el equipo</p>
                       <div className="font-mono text-[10px] text-cyan-800 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-200">
-                        Lat: {defaultCenter[0].toFixed(5)}, Lon: {defaultCenter[1].toFixed(5)}
+                        Lat: {Number(devicePosition[0]).toFixed(5)}, Lon: {Number(devicePosition[1]).toFixed(5)}
                       </div>
                     </div>
                   </Popup>
@@ -887,7 +965,7 @@ export default function GeofenceManagerModal({
                         <span className="truncate max-w-[170px]">{deviceName || 'Vehículo Activo'}</span>
                       </p>
                       <p className="text-[10px] font-mono text-cyan-300">
-                        {defaultCenter[0].toFixed(5)}, {defaultCenter[1].toFixed(5)}
+                        {Number(devicePosition[0]).toFixed(5)}, {Number(devicePosition[1]).toFixed(5)}
                       </p>
                     </div>
                   </div>

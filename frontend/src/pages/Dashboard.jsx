@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   getDeviceStatus, 
   getDeviceLogs, 
@@ -512,6 +512,30 @@ export default function Dashboard() {
       ? [singleStatus.last_lat, singleStatus.last_lon] 
       : defaultPos
   );
+
+  // Coordenadas estables del dispositivo activo para el modal de geocercas
+  const activeDeviceCoords = useMemo(() => {
+    if (isFleetView) return null;
+    if (singleStatus?.last_lat && singleStatus?.last_lon) {
+      return [Number(singleStatus.last_lat), Number(singleStatus.last_lon)];
+    }
+    const fleetDev = fleetSummary?.devices?.find(d => d.device_id === selectedDeviceId);
+    if (fleetDev?.last_lat && fleetDev?.last_lon) {
+      return [Number(fleetDev.last_lat), Number(fleetDev.last_lon)];
+    }
+    if (currentDeviceObj?.last_lat && currentDeviceObj?.last_lon) {
+      return [Number(currentDeviceObj.last_lat), Number(currentDeviceObj.last_lon)];
+    }
+    return null;
+  }, [
+    isFleetView,
+    singleStatus?.last_lat,
+    singleStatus?.last_lon,
+    fleetSummary,
+    selectedDeviceId,
+    currentDeviceObj?.last_lat,
+    currentDeviceObj?.last_lon
+  ]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
@@ -2375,20 +2399,7 @@ export default function Dashboard() {
         deviceList={deviceList}
         isFleetView={isFleetView}
         selectedDevice={currentDeviceObj}
-        devicePosition={(() => {
-          if (isFleetView) return null;
-          if (singleStatus?.last_lat && singleStatus?.last_lon) {
-            return [Number(singleStatus.last_lat), Number(singleStatus.last_lon)];
-          }
-          const fleetDev = fleetSummary?.devices?.find(d => d.device_id === selectedDeviceId);
-          if (fleetDev?.last_lat && fleetDev?.last_lon) {
-            return [Number(fleetDev.last_lat), Number(fleetDev.last_lon)];
-          }
-          if (currentDeviceObj?.last_lat && currentDeviceObj?.last_lon) {
-            return [Number(currentDeviceObj.last_lat), Number(currentDeviceObj.last_lon)];
-          }
-          return null;
-        })()}
+        devicePosition={activeDeviceCoords}
         deviceName={currentDeviceObj?.name || singleStatus?.name || (selectedDeviceId !== 'all' ? selectedDeviceId : '')}
       />
 
