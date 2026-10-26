@@ -36,6 +36,12 @@ class Device(Base):
     odometer_offset_km = Column(Float, default=0.0, nullable=False)
     engine_hours_offset = Column(Float, default=0.0, nullable=False)
 
+    # Control de Horarios Operativos (Sprint 1 - v0.5.0)
+    work_schedule_enabled = Column(Boolean, default=False, nullable=False)
+    work_schedule_start = Column(String(10), default="07:00", nullable=True) # ej. "07:00"
+    work_schedule_end = Column(String(10), default="19:00", nullable=True)   # ej. "19:00"
+    allowed_weekdays = Column(String(30), default="0,1,2,3,4", nullable=True) # 0=Lun, 4=Vie
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class TelemetryEvent(Base):
@@ -146,3 +152,36 @@ class VehicleTrip(Base):
     end_latitude = Column(Float, nullable=True)
     end_longitude = Column(Float, nullable=True)
     is_closed = Column(Boolean, default=False, nullable=False, index=True)
+
+class Geofence(Base):
+    __tablename__ = "geofences"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    type = Column(String(20), default="POLYGON", nullable=False) # POLYGON, CIRCLE
+    center_lat = Column(Float, nullable=True)
+    center_lon = Column(Float, nullable=True)
+    radius_meters = Column(Float, nullable=True)
+    polygon_vertices = Column(JSON, nullable=True) # [[lat, lon], [lat, lon], ...]
+    color = Column(String(20), default="#06b6d4", nullable=False) # Hex para UI
+    speed_limit_kmh = Column(Float, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    events = relationship("GeofenceEvent", back_populates="geofence", cascade="all, delete-orphan")
+
+class GeofenceEvent(Base):
+    __tablename__ = "geofence_events"
+    id = Column(Integer, primary_key=True, index=True)
+    geofence_id = Column(Integer, ForeignKey("geofences.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_id = Column(String, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(20), nullable=False) # ENTER, EXIT, OVERSPEED
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    speed_kmh = Column(Float, default=0.0, nullable=False)
+    duration_inside_seconds = Column(Integer, nullable=True) # Calculado al registrar EXIT
+
+    geofence = relationship("Geofence", back_populates="events")
+

@@ -7,7 +7,8 @@ import {
   exportDeviceLogs,
   createDevice,
   updateDevice,
-  deleteDevice
+  deleteDevice,
+  getGeofences
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -18,6 +19,7 @@ import AlertNotificationBell from '../components/AlertNotificationBell';
 import MaintenancePlannerModal from '../components/MaintenancePlannerModal';
 import TripHistoryModal from '../components/TripHistoryModal';
 import RoutePlayback from '../components/RoutePlayback';
+import GeofenceManagerModal from '../components/GeofenceManagerModal';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -25,9 +27,9 @@ import {
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
   Trash2, X, Smartphone, Satellite, Info, HardDrive,
-  Battery, Signal, Code, Pencil, Settings, Zap, Sliders, Wrench
+  Battery, Signal, Code, Pencil, Settings, Zap, Sliders, Wrench, Shield
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -123,6 +125,8 @@ export default function Dashboard() {
   const [showCalibrationModal, setShowCalibrationModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [showTripModal, setShowTripModal] = useState(false);
+  const [showGeofenceModal, setShowGeofenceModal] = useState(false);
+  const [activeGeofences, setActiveGeofences] = useState([]);
   const [playbackTrip, setPlaybackTrip] = useState(null);
 
   // Estado para gestión de dispositivos por el Operador (CRUD Completo)
@@ -165,13 +169,17 @@ export default function Dashboard() {
   const fetchAllData = async (manual = false) => {
     if (manual) setIsRefreshing(true);
     try {
-      // 1. Obtener lista de dispositivos registrados y estado de toda la flota
-      const [devs, fleet] = await Promise.all([
+      // 1. Obtener lista de dispositivos registrados, estado de flota y geocercas
+      const [devs, fleet, geofencesData] = await Promise.all([
         getDevices(),
-        getAllDevicesStatus()
+        getAllDevicesStatus(),
+        getGeofences().catch(() => [])
       ]);
       setDeviceList(devs);
       setFleetSummary(fleet);
+      if (Array.isArray(geofencesData)) {
+        setActiveGeofences(geofencesData.filter(g => g.is_active));
+      }
 
       // 2. Si hay un dispositivo individual seleccionado
       if (selectedDeviceId !== 'all') {
@@ -547,6 +555,21 @@ export default function Dashboard() {
             >
               <Navigation className="w-3.5 h-3.5 text-cyan-400" />
               <span className="hidden sm:inline">Viajes</span>
+            </button>
+
+            {/* Botón Gestión de Geocercas (Sprint 1 - v0.5.0) */}
+            <button
+              onClick={() => setShowGeofenceModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95 border border-cyan-500/30 text-xs font-bold text-cyan-300 transition-all cursor-pointer shadow-sm hover:shadow-cyan-950/30"
+              title="Gestión de Geocercas y Perímetros Seguros"
+            >
+              <Shield className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Geocercas</span>
+              {activeGeofences.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/30 text-cyan-200 font-mono">
+                  {activeGeofences.length}
+                </span>
+              )}
             </button>
 
             {/* Botón de Exportar Datos CSV */}
@@ -1249,6 +1272,62 @@ export default function Dashboard() {
                     dashArray="4, 6"
                   />
                 )}
+
+                {/* Geocercas Activas del Usuario (Sprint 1 - v0.5.0) */}
+                {activeGeofences.map(gf => {
+                  const color = gf.color || '#06b6d4';
+                  if (gf.type === 'CIRCLE' && gf.center_lat && gf.center_lon) {
+                    return (
+                      <Circle
+                        key={`main-gf-circle-${gf.id}`}
+                        center={[gf.center_lat, gf.center_lon]}
+                        radius={gf.radius_meters || 200}
+                        pathOptions={{
+                          color: color,
+                          fillColor: color,
+                          fillOpacity: 0.15,
+                          weight: 2
+                        }}
+                      >
+                        <Popup>
+                          <div className="text-xs space-y-1 text-slate-100 p-1">
+                            <strong className="block text-cyan-400 font-bold">{gf.name}</strong>
+                            <p className="text-slate-300">{gf.description || 'Zona operativa'}</p>
+                            <div className="flex items-center gap-2 pt-1 font-mono text-[10px] text-slate-400">
+                              <span>Radio: {gf.radius_meters}m</span>
+                              {gf.speed_limit_kmh && <span>• Máx: {gf.speed_limit_kmh} km/h</span>}
+                            </div>
+                          </div>
+                        </Popup>
+                      </Circle>
+                    );
+                  } else if (gf.type === 'POLYGON' && gf.polygon_vertices && gf.polygon_vertices.length >= 3) {
+                    return (
+                      <Polygon
+                        key={`main-gf-poly-${gf.id}`}
+                        positions={gf.polygon_vertices}
+                        pathOptions={{
+                          color: color,
+                          fillColor: color,
+                          fillOpacity: 0.15,
+                          weight: 2
+                        }}
+                      >
+                        <Popup>
+                          <div className="text-xs space-y-1 text-slate-100 p-1">
+                            <strong className="block text-cyan-400 font-bold">{gf.name}</strong>
+                            <p className="text-slate-300">{gf.description || 'Zona operativa'}</p>
+                            <div className="flex items-center gap-2 pt-1 font-mono text-[10px] text-slate-400">
+                              <span>Polígono: {gf.polygon_vertices.length} vértices</span>
+                              {gf.speed_limit_kmh && <span>• Máx: {gf.speed_limit_kmh} km/h</span>}
+                            </div>
+                          </div>
+                        </Popup>
+                      </Polygon>
+                    );
+                  }
+                  return null;
+                })}
 
                 {/* RENDERIZADO DE TODOS LOS DISPOSITIVOS SIMULTÁNEAMENTE */}
                 {isFleetView && fleetSummary?.devices?.map((dev) => {
@@ -2128,6 +2207,16 @@ export default function Dashboard() {
         isOpen={!!playbackTrip}
         onClose={() => setPlaybackTrip(null)}
         trip={playbackTrip}
+      />
+
+      {/* Modal de Gestión de Geocercas Inteligentes (Sprint 1 - v0.5.0) */}
+      <GeofenceManagerModal
+        isOpen={showGeofenceModal}
+        onClose={() => {
+          setShowGeofenceModal(false);
+          fetchAllData(true);
+        }}
+        deviceList={deviceList}
       />
 
       {/* Footer Industrial con Versión SemVer y Trazabilidad del Producto */}

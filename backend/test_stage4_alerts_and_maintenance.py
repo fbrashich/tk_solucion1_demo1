@@ -9,9 +9,9 @@ from unittest.mock import MagicMock
 
 # Configuración de mocks para dependencias de infraestructura en entornos locales sin dependencias externas
 for mod in [
-    'sqlalchemy', 'sqlalchemy.orm', 'sqlalchemy.ext', 
+    'sqlalchemy', 'sqlalchemy.orm', 'sqlalchemy.ext', 'pydantic_settings', 'app.core.config',
     'sqlalchemy.ext.asyncio', 'sqlalchemy.future', 'sqlalchemy.sql',
-    'app.models', 'app.models.models', 'app.services.live_stream'
+    'app.models', 'app.models.models', 'app.services.live_stream', 'app.services.live_manager'
 ]:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()

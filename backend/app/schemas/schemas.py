@@ -51,6 +51,10 @@ class DeviceBase(BaseModel):
     category: Optional[str] = "machinery"
     odometer_offset_km: Optional[float] = 0.0
     engine_hours_offset: Optional[float] = 0.0
+    work_schedule_enabled: Optional[bool] = False
+    work_schedule_start: Optional[str] = "07:00"
+    work_schedule_end: Optional[str] = "19:00"
+    allowed_weekdays: Optional[str] = "0,1,2,3,4"
 
     @field_validator('device_id', 'name', 'type', 'description', 'traccar_model', 'sim_phone', mode='before')
     @classmethod
@@ -75,6 +79,10 @@ class DeviceUpdate(BaseModel):
     category: Optional[str] = None
     odometer_offset_km: Optional[float] = None
     engine_hours_offset: Optional[float] = None
+    work_schedule_enabled: Optional[bool] = None
+    work_schedule_start: Optional[str] = None
+    work_schedule_end: Optional[str] = None
+    allowed_weekdays: Optional[str] = None
 
     @field_validator('name', 'type', 'description', 'traccar_model', 'sim_phone', mode='before')
     @classmethod
@@ -314,4 +322,69 @@ class VehicleTripRouteResponse(BaseModel):
     trip: VehicleTripResponse
     points: List[TripPoint] = []
     point_count: int = 0
+
+# ==============================================================================
+# GEOCERCAS INTELIGENTES Y CONTROL DE PERMANENCIA (Sprint 1 - v0.5.0)
+# ==============================================================================
+
+class GeofenceBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    type: str = Field(default="POLYGON", pattern="^(POLYGON|CIRCLE)$")
+    center_lat: Optional[float] = None
+    center_lon: Optional[float] = None
+    radius_meters: Optional[float] = None
+    polygon_vertices: Optional[List[List[float]]] = None
+    color: Optional[str] = "#06b6d4"
+    speed_limit_kmh: Optional[float] = None
+    is_active: bool = True
+
+    @field_validator('name', 'description', mode='before')
+    @classmethod
+    def sanitize_strings(cls, v):
+        if isinstance(v, str):
+            if re.search(r'[<>]', v):
+                raise ValueError("No se permiten caracteres HTML o scripts (<, >)")
+            return v.strip()
+        return v
+
+class GeofenceCreate(GeofenceBase):
+    pass
+
+class GeofenceUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    center_lat: Optional[float] = None
+    center_lon: Optional[float] = None
+    radius_meters: Optional[float] = None
+    polygon_vertices: Optional[List[List[float]]] = None
+    color: Optional[str] = None
+    speed_limit_kmh: Optional[float] = None
+    is_active: Optional[bool] = None
+
+class GeofenceResponse(GeofenceBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    active_devices_inside: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+class GeofenceEventResponse(BaseModel):
+    id: int
+    geofence_id: int
+    device_id: str
+    event_type: str
+    timestamp: datetime
+    latitude: float
+    longitude: float
+    speed_kmh: float
+    duration_inside_seconds: Optional[int] = None
+    geofence_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 

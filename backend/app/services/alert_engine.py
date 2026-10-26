@@ -7,6 +7,7 @@ from sqlalchemy import desc, and_
 
 from app.models.models import VehicleAlert
 from app.services.live_stream import live_manager
+from app.services.notification_dispatcher import dispatch_alert
 
 logger = logging.getLogger("alert_engine")
 
@@ -19,7 +20,11 @@ def evaluate_alert_rules(
     speed_kmh: float,
     motion: bool,
     timestamp: datetime,
-    speed_limit_kmh: float = 100.0
+    speed_limit_kmh: float = 100.0,
+    work_schedule_enabled: bool = False,
+    work_schedule_start: Optional[str] = "07:00",
+    work_schedule_end: Optional[str] = "19:00",
+    allowed_weekdays: Optional[str] = "0,1,2,3,4"
 ) -> List[Dict[str, Any]]:
     """
     Motor de reglas síncrono para evaluar condiciones anómalas de telemetría.
@@ -93,21 +98,51 @@ def evaluate_alert_rules(
             "timestamp": timestamp
         })
 
+    # Regla 7 (Sprint 1): Control de Horarios Operativos (Anti-Uso Personal)
+    if work_schedule_enabled and ignition:
+        weekday_int = timestamp.weekday() # 0 = Lunes, 6 = Domingo
+        allowed_days_list = [d.strip() for d in (allowed_weekdays or "").split(",") if d.strip()]
+
+        # Verificar si el día está habilitado
+        day_violation = str(weekday_int) not in allowed_days_list
+
+        # Verificar si la hora está dentro del rango
+        time_str = timestamp.strftime("%H:%M")
+        start_str = (work_schedule_start or "07:00").strip()
+        end_str = (work_schedule_end or "19:00").strip()
+        time_violation = (time_str < start_str) or (time_str > end_str)
+
+        if day_violation or time_violation:
+            motivo = "en día no laborable" if day_violation else f"fuera de horario ({time_str} hs vs {start_str}-{end_str} hs)"
+            candidates.append({
+                "device_id": device_id,
+                "alert_type": "UNAUTHORIZED_SCHEDULE",
+                "severity": "WARNING",
+                "message": f"Uso no autorizado detectado: Vehículo encendido {motivo}.",
+                "value": round(speed_kmh, 1),
+                "timestamp": timestamp
+            })
+
     return candidates
 
 async def process_and_persist_alerts(
     db: AsyncSession,
     device_id: str,
+    device_name: str,
     power_voltage: Optional[float],
     ignition: bool,
     speed_kmh: float,
     motion: bool,
     timestamp: datetime,
-    speed_limit_kmh: float = 100.0
+    speed_limit_kmh: float = 100.0,
+    work_schedule_enabled: bool = False,
+    work_schedule_start: Optional[str] = "07:00",
+    work_schedule_end: Optional[str] = "19:00",
+    allowed_weekdays: Optional[str] = "0,1,2,3,4"
 ) -> List[VehicleAlert]:
     """
     Evalúa candidatos, aplica anti-flapping (throttle de 15 min),
-    persiste en base de datos y emite broadcast en tiempo real.
+    persiste en base de datos, emite broadcast SSE y despacha a Telegram.
     """
     candidates = evaluate_alert_rules(
         device_id=device_id,
@@ -116,7 +151,11 @@ async def process_and_persist_alerts(
         speed_kmh=speed_kmh,
         motion=motion,
         timestamp=timestamp,
-        speed_limit_kmh=speed_limit_kmh
+        speed_limit_kmh=speed_limit_kmh,
+        work_schedule_enabled=work_schedule_enabled,
+        work_schedule_start=work_schedule_start,
+        work_schedule_end=work_schedule_end,
+        allowed_weekdays=allowed_weekdays
     )
 
     if not candidates:
@@ -155,7 +194,20 @@ async def process_and_persist_alerts(
         db.add(alert)
         created_alerts.append(alert)
 
-        # Broadcast SSE en tiempo real
+        # 1. Despacho a Telegram Bot API (Sprint 1)
+        try:
+            dispatch_alert(
+                alert_type=item["alert_type"],
+                severity=item["severity"],
+                device_name=device_name or device_id,
+                device_id=device_id,
+                message=item["message"],
+                value=item["value"]
+            )
+        except Exception as e:
+            logger.warning(f"Error despachando alerta {item['alert_type']} a Telegram: {e}")
+
+        # 2. Broadcast SSE en tiempo real para el frontend
         try:
             await live_manager.broadcast({
                 "id": f"alert_{device_id}_{int(timestamp.timestamp())}_{item['alert_type']}",
@@ -163,7 +215,7 @@ async def process_and_persist_alerts(
                 "kind": "ALERT",
                 "severity": item["severity"],
                 "imei": device_id,
-                "message": f"🚨 [{item['severity']}] {device_id}: {item['message']}",
+                "message": f"🚨 [{item['severity']}] {device_name or device_id}: {item['message']}",
                 "details": {
                     "device_id": device_id,
                     "alert_type": item["alert_type"],
@@ -178,3 +230,4 @@ async def process_and_persist_alerts(
         logger.info(f"[ALERTS] Creadas {len(created_alerts)} alertas operativas para {device_id}")
 
     return created_alerts
+

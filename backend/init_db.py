@@ -134,8 +134,51 @@ async def init_db():
                         is_closed BOOLEAN DEFAULT FALSE NOT NULL
                     );
                 """))
+                # Etapa 3: Detección Automática de Viajes y Paradas
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_trips_device_time ON vehicle_trips(device_id, start_time DESC);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_trips_device_closed ON vehicle_trips(device_id, is_closed);"))
+
+                # Sprint 1 (v0.5.0): Control de Horarios Operativos
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS work_schedule_enabled BOOLEAN DEFAULT FALSE;"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS work_schedule_start VARCHAR(10) DEFAULT '07:00';"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS work_schedule_end VARCHAR(10) DEFAULT '19:00';"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS allowed_weekdays VARCHAR(30) DEFAULT '0,1,2,3,4';"))
+
+                # Sprint 1 (v0.5.0): Geocercas Inteligentes y Eventos
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS geofences (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        name VARCHAR(100) NOT NULL,
+                        description VARCHAR(255),
+                        type VARCHAR(20) DEFAULT 'POLYGON' NOT NULL,
+                        center_lat FLOAT,
+                        center_lon FLOAT,
+                        radius_meters FLOAT,
+                        polygon_vertices JSONB,
+                        color VARCHAR(20) DEFAULT '#06b6d4' NOT NULL,
+                        speed_limit_kmh FLOAT,
+                        is_active BOOLEAN DEFAULT TRUE NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_geofences_user ON geofences(user_id, is_active);"))
+
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS geofence_events (
+                        id SERIAL PRIMARY KEY,
+                        geofence_id INTEGER NOT NULL REFERENCES geofences(id) ON DELETE CASCADE,
+                        device_id VARCHAR NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                        event_type VARCHAR(20) NOT NULL,
+                        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        latitude FLOAT NOT NULL,
+                        longitude FLOAT NOT NULL,
+                        speed_kmh FLOAT DEFAULT 0.0 NOT NULL,
+                        duration_inside_seconds INTEGER
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_geofence_events_device_time ON geofence_events(device_id, timestamp DESC);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_geofence_events_geofence ON geofence_events(geofence_id, timestamp DESC);"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")

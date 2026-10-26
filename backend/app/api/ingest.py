@@ -19,6 +19,7 @@ from app.services.fmc150_decoder import (
 )
 from app.services.alert_engine import process_and_persist_alerts
 from app.services.trip_detector import process_position_for_trips
+from app.services.geofence_engine import evaluate_geofences_for_device
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -284,15 +285,20 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
 
         is_idling = ignition and speed_kmh < 3.0 and not motion
 
-        # Evaluación síncrona de alertas operativas (Etapa 4)
+        # Evaluación síncrona de alertas operativas (Etapa 4 + Sprint 1)
         active_alerts = await process_and_persist_alerts(
             db=db,
             device_id=local_device.device_id,
+            device_name=local_device.name,
             power_voltage=power_val,
             ignition=ignition,
             speed_kmh=speed_kmh,
             motion=motion,
-            timestamp=fix_time
+            timestamp=fix_time,
+            work_schedule_enabled=local_device.work_schedule_enabled or False,
+            work_schedule_start=local_device.work_schedule_start,
+            work_schedule_end=local_device.work_schedule_end,
+            allowed_weekdays=local_device.allowed_weekdays
         )
 
         # Enriquecer payload normalizado
@@ -391,19 +397,20 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
         except Exception as e:
             logger.warning(f"[TRIP_DETECTOR] Error procesando viaje para {local_device.device_id}: {e}")
 
-        # Evaluación y persistencia de alertas en tiempo real (Etapa 4)
+        # Evaluación de Geocercas Inteligentes (Sprint 1 - v0.5.0)
         try:
-            await process_and_persist_alerts(
+            await evaluate_geofences_for_device(
                 db=db,
                 device_id=local_device.device_id,
-                power_voltage=power_val,
-                ignition=ignition,
+                device_name=local_device.name,
+                user_id=local_device.user_id,
+                lat=lat,
+                lon=lon,
                 speed_kmh=speed_kmh,
-                motion=motion,
                 timestamp=fix_time
             )
         except Exception as e:
-            logger.warning(f"[ALERT_ENGINE] Error procesando alertas para {local_device.device_id}: {e}")
+            logger.warning(f"[GEOFENCE_ENGINE] Error evaluando geocercas para {local_device.device_id}: {e}")
 
         processed_count += 1
 

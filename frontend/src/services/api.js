@@ -231,6 +231,39 @@ export const deleteTrip = async (tripId) => {
 };
 
 // ==============================================================================
+// GESTIÓN DE GEOCERCAS Y EVENTOS (Sprint 1 - v0.5.0)
+// ==============================================================================
+export const getGeofences = async () => {
+  const response = await api.get('/geofences');
+  return response.data;
+};
+
+export const createGeofence = async (data) => {
+  const response = await api.post('/geofences', data);
+  return response.data;
+};
+
+export const updateGeofence = async (geofenceId, data) => {
+  const response = await api.put(`/geofences/${geofenceId}`, data);
+  return response.data;
+};
+
+export const deleteGeofence = async (geofenceId) => {
+  const response = await api.delete(`/geofences/${geofenceId}`);
+  return response.data;
+};
+
+export const getGeofenceEvents = async (geofenceId, limit = 50) => {
+  const response = await api.get(`/geofences/${geofenceId}/events`, { params: { limit } });
+  return response.data;
+};
+
+export const getDeviceGeofenceEvents = async (deviceId, limit = 50) => {
+  const response = await api.get(`/devices/${deviceId}/geofence-events`, { params: { limit } });
+  return response.data;
+};
+
+// ==============================================================================
 // INFORMACIÓN DEL SISTEMA Y VERSIONADO
 // ==============================================================================
 export const getSystemVersion = async () => {
@@ -239,5 +272,6 @@ export const getSystemVersion = async () => {
 };
 
 export default api;
+
 
 
