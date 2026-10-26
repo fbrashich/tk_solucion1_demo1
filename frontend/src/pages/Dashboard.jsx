@@ -2375,13 +2375,20 @@ export default function Dashboard() {
         deviceList={deviceList}
         isFleetView={isFleetView}
         selectedDevice={currentDeviceObj}
-        devicePosition={
-          !isFleetView && singleStatus?.last_lat && singleStatus?.last_lon
-            ? [Number(singleStatus.last_lat), Number(singleStatus.last_lon)]
-            : (!isFleetView && currentDeviceObj?.last_lat && currentDeviceObj?.last_lon)
-              ? [Number(currentDeviceObj.last_lat), Number(currentDeviceObj.last_lon)]
-              : null
-        }
+        devicePosition={(() => {
+          if (isFleetView) return null;
+          if (singleStatus?.last_lat && singleStatus?.last_lon) {
+            return [Number(singleStatus.last_lat), Number(singleStatus.last_lon)];
+          }
+          const fleetDev = fleetSummary?.devices?.find(d => d.device_id === selectedDeviceId);
+          if (fleetDev?.last_lat && fleetDev?.last_lon) {
+            return [Number(fleetDev.last_lat), Number(fleetDev.last_lon)];
+          }
+          if (currentDeviceObj?.last_lat && currentDeviceObj?.last_lon) {
+            return [Number(currentDeviceObj.last_lat), Number(currentDeviceObj.last_lon)];
+          }
+          return null;
+        })()}
         deviceName={currentDeviceObj?.name || singleStatus?.name || (selectedDeviceId !== 'all' ? selectedDeviceId : '')}
       />
 
