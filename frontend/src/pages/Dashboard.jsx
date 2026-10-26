@@ -16,6 +16,8 @@ import LiveConsoleModal from '../components/LiveConsoleModal';
 import DeviceCalibrationModal from '../components/DeviceCalibrationModal';
 import AlertNotificationBell from '../components/AlertNotificationBell';
 import MaintenancePlannerModal from '../components/MaintenancePlannerModal';
+import TripHistoryModal from '../components/TripHistoryModal';
+import RoutePlayback from '../components/RoutePlayback';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -120,6 +122,8 @@ export default function Dashboard() {
   const [isLiveConsoleOpen, setIsLiveConsoleOpen] = useState(false);
   const [showCalibrationModal, setShowCalibrationModal] = useState(false);
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [playbackTrip, setPlaybackTrip] = useState(null);
 
   // Estado para gestión de dispositivos por el Operador (CRUD Completo)
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -535,6 +539,16 @@ export default function Dashboard() {
               <span className="hidden sm:inline">Mantenimiento</span>
             </button>
 
+            {/* Botón Historial de Viajes y Playback (Etapa 3) */}
+            <button
+              onClick={() => setShowTripModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95 border border-cyan-500/30 text-xs font-bold text-cyan-300 transition-all cursor-pointer shadow-sm hover:shadow-cyan-950/30"
+              title="Historial de Viajes y Reproducción de Recorridos"
+            >
+              <Navigation className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Viajes</span>
+            </button>
+
             {/* Botón de Exportar Datos CSV */}
             <button
               onClick={handleExportCSV}
@@ -903,6 +917,16 @@ export default function Dashboard() {
               >
                 <Wrench className="w-4 h-4 text-amber-400" />
                 <span>Mantenimiento</span>
+              </button>
+
+              {/* Botón Historial de Viajes (Etapa 3) */}
+              <button
+                onClick={() => setShowTripModal(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-cyan-500/30 transition-all cursor-pointer shadow-md active:scale-95"
+                title="Historial de viajes del vehículo"
+              >
+                <Navigation className="w-4 h-4 text-cyan-400" />
+                <span>Viajes</span>
               </button>
 
               {/* Botón para ver Telemetría Cruda (JSON) */}
@@ -2088,6 +2112,22 @@ export default function Dashboard() {
         deviceList={deviceList}
         currentOdoKm={calibratedOdoKm}
         currentEngineHours={totalHours}
+      />
+
+      {/* Modal de Historial de Viajes (Etapa 3) */}
+      <TripHistoryModal
+        isOpen={showTripModal}
+        onClose={() => setShowTripModal(false)}
+        selectedDeviceId={selectedDeviceId}
+        deviceList={deviceList}
+        onSelectTripForPlayback={(trip) => setPlaybackTrip(trip)}
+      />
+
+      {/* Modal de Reproducción de Recorrido Playback (Etapa 3) */}
+      <RoutePlayback
+        isOpen={!!playbackTrip}
+        onClose={() => setPlaybackTrip(null)}
+        trip={playbackTrip}
       />
 
     </div>

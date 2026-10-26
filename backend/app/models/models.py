@@ -130,3 +130,19 @@ class MaintenanceLog(Base):
 
     plan = relationship("MaintenancePlan", back_populates="logs")
 
+class VehicleTrip(Base):
+    __tablename__ = "vehicle_trips"
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False, index=True)
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Integer, default=0, nullable=False)
+    distance_km = Column(Float, default=0.0, nullable=False)
+    max_speed_kmh = Column(Float, default=0.0, nullable=False)
+    avg_speed_kmh = Column(Float, default=0.0, nullable=False)
+    idling_seconds = Column(Integer, default=0, nullable=False)
+    start_latitude = Column(Float, nullable=True)
+    start_longitude = Column(Float, nullable=True)
+    end_latitude = Column(Float, nullable=True)
+    end_longitude = Column(Float, nullable=True)
+    is_closed = Column(Boolean, default=False, nullable=False, index=True)

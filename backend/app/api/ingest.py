@@ -18,6 +18,7 @@ from app.services.fmc150_decoder import (
     evaluate_battery_health
 )
 from app.services.alert_engine import process_and_persist_alerts
+from app.services.trip_detector import process_position_for_trips
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -375,6 +376,35 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             else:
                 device_state.last_idling_start = None
 
+        # Detección y acumulación de viajes y paradas (Etapa 3)
+        try:
+            await process_position_for_trips(
+                db=db,
+                device_id=local_device.device_id,
+                latitude=lat,
+                longitude=lon,
+                speed_kmh=speed_kmh,
+                ignition=ignition,
+                motion=motion,
+                timestamp=fix_time
+            )
+        except Exception as e:
+            logger.warning(f"[TRIP_DETECTOR] Error procesando viaje para {local_device.device_id}: {e}")
+
+        # Evaluación y persistencia de alertas en tiempo real (Etapa 4)
+        try:
+            await process_and_persist_alerts(
+                db=db,
+                device_id=local_device.device_id,
+                power_voltage=power_val,
+                ignition=ignition,
+                speed_kmh=speed_kmh,
+                motion=motion,
+                timestamp=fix_time
+            )
+        except Exception as e:
+            logger.warning(f"[ALERT_ENGINE] Error procesando alertas para {local_device.device_id}: {e}")
+
         processed_count += 1
 
         # Formatear strings limpios para Live Stream (sin bug falsy)
@@ -496,6 +526,21 @@ async def ingest_data(payload: IngestPayload, db: AsyncSession = Depends(get_db)
         device_state.last_longitude = payload.lon
         device_state.last_speed = payload.speed
         device_state.last_raw_data = payload.raw_data
+
+    # Detección de viajes en ingesta directa
+    try:
+        await process_position_for_trips(
+            db=db,
+            device_id=payload.device_id,
+            latitude=payload.lat,
+            longitude=payload.lon,
+            speed_kmh=payload.speed or 0.0,
+            ignition=payload.ignition,
+            motion=(payload.speed or 0.0) >= 3.0,
+            timestamp=event_timestamp
+        )
+    except Exception as e:
+        logger.warning(f"[TRIP_DETECTOR] Error en ingesta manual: {e}")
 
     await db.commit()
     return {

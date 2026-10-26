@@ -114,6 +114,28 @@ async def init_db():
                     );
                 """))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_maint_logs_device ON maintenance_logs(device_id, executed_at DESC);"))
+
+                # Etapa 3: Detección Automática de Viajes y Paradas
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS vehicle_trips (
+                        id SERIAL PRIMARY KEY,
+                        device_id VARCHAR NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+                        end_time TIMESTAMP WITH TIME ZONE,
+                        duration_seconds INTEGER DEFAULT 0 NOT NULL,
+                        distance_km FLOAT DEFAULT 0.0 NOT NULL,
+                        max_speed_kmh FLOAT DEFAULT 0.0 NOT NULL,
+                        avg_speed_kmh FLOAT DEFAULT 0.0 NOT NULL,
+                        idling_seconds INTEGER DEFAULT 0 NOT NULL,
+                        start_latitude FLOAT,
+                        start_longitude FLOAT,
+                        end_latitude FLOAT,
+                        end_longitude FLOAT,
+                        is_closed BOOLEAN DEFAULT FALSE NOT NULL
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_trips_device_time ON vehicle_trips(device_id, start_time DESC);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_trips_device_closed ON vehicle_trips(device_id, is_closed);"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")

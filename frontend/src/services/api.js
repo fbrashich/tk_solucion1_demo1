@@ -209,5 +209,26 @@ export const getMaintenanceLogs = async (deviceId) => {
   return response.data;
 };
 
+// ==============================================================================
+// GESTIÓN DE VIAJES, PARADAS Y REPLAY (ETAPA 3)
+// ==============================================================================
+export const getDeviceTrips = async (deviceId = 'all', fromDate = null, toDate = null, limit = 50) => {
+  const params = { limit };
+  if (fromDate) params.from_date = fromDate;
+  if (toDate) params.to_date = toDate;
+  const response = await api.get(`/devices/${deviceId}/trips`, { params });
+  return response.data;
+};
+
+export const getTripRoute = async (tripId) => {
+  const response = await api.get(`/trips/${tripId}/route`);
+  return response.data;
+};
+
+export const deleteTrip = async (tripId) => {
+  const response = await api.delete(`/trips/${tripId}`);
+  return response.data;
+};
+
 export default api;
 

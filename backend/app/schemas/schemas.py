@@ -275,3 +275,43 @@ class MaintenanceLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ==============================================================================
+# SCHEMAS DE VIAJES Y RECORRIDOS (ETAPA 3)
+# ==============================================================================
+class VehicleTripResponse(BaseModel):
+    id: int
+    device_id: str
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    duration_seconds: int = 0
+    distance_km: float = 0.0
+    max_speed_kmh: float = 0.0
+    avg_speed_kmh: float = 0.0
+    idling_seconds: int = 0
+    start_latitude: Optional[float] = None
+    start_longitude: Optional[float] = None
+    end_latitude: Optional[float] = None
+    end_longitude: Optional[float] = None
+    is_closed: bool = False
+    idling_fuel_cost_est: Optional[float] = 0.0 # Estimación de combustible desperdiciado en ralentí
+
+    class Config:
+        from_attributes = True
+
+class TripPoint(BaseModel):
+    latitude: float
+    longitude: float
+    speed: Optional[float] = 0.0
+    course: Optional[float] = 0.0
+    altitude: Optional[float] = None
+    timestamp: datetime
+    ignition_state: bool = True
+
+    class Config:
+        from_attributes = True
+
+class VehicleTripRouteResponse(BaseModel):
+    trip: VehicleTripResponse
+    points: List[TripPoint] = []
+    point_count: int = 0
+
