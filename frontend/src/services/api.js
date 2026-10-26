@@ -165,5 +165,49 @@ export const getLiveStreamUrl = (filter = '') => {
   return url;
 };
 
+// ==========================================
+// ETAPA 4: ALERTAS OPERATIVAS Y MANTENIMIENTO
+// ==========================================
+
+export const getDeviceAlerts = async (deviceId, resolved = false, severity = null) => {
+  const params = {};
+  if (resolved !== null) params.resolved = resolved;
+  if (severity) params.severity = severity;
+  const response = await api.get(`/devices/${deviceId}/alerts`, { params });
+  return response.data;
+};
+
+export const resolveAlert = async (alertId, notes = '') => {
+  const response = await api.put(`/alerts/${alertId}/resolve`, { notes });
+  return response.data;
+};
+
+export const getDeviceMaintenance = async (deviceId, activeOnly = true) => {
+  const response = await api.get(`/devices/${deviceId}/maintenance`, {
+    params: { active_only: activeOnly }
+  });
+  return response.data;
+};
+
+export const createMaintenancePlan = async (deviceId, planData) => {
+  const response = await api.post(`/devices/${deviceId}/maintenance`, planData);
+  return response.data;
+};
+
+export const recordMaintenanceService = async (planId, recordData) => {
+  const response = await api.post(`/maintenance/${planId}/record`, recordData);
+  return response.data;
+};
+
+export const deleteMaintenancePlan = async (planId) => {
+  const response = await api.delete(`/maintenance/${planId}`);
+  return response.data;
+};
+
+export const getMaintenanceLogs = async (deviceId) => {
+  const response = await api.get(`/devices/${deviceId}/maintenance/logs`);
+  return response.data;
+};
+
 export default api;
 

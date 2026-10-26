@@ -66,6 +66,54 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS calibrated_odometer_km FLOAT DEFAULT 0.0;"))
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS total_idling_hours FLOAT DEFAULT 0.0;"))
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_idling_start TIMESTAMP WITH TIME ZONE;"))
+
+                # Etapa 4: Alertas Operativas y Mantenimiento Preventivo
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS vehicle_alerts (
+                        id SERIAL PRIMARY KEY,
+                        device_id VARCHAR NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                        alert_type VARCHAR NOT NULL,
+                        severity VARCHAR DEFAULT 'WARNING' NOT NULL,
+                        timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        message TEXT NOT NULL,
+                        value FLOAT,
+                        resolved BOOLEAN DEFAULT FALSE NOT NULL,
+                        resolved_at TIMESTAMP WITH TIME ZONE,
+                        resolved_by VARCHAR
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_alerts_device_resolved ON vehicle_alerts(device_id, resolved, timestamp DESC);"))
+
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS maintenance_plans (
+                        id SERIAL PRIMARY KEY,
+                        device_id VARCHAR NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                        title VARCHAR NOT NULL,
+                        service_type VARCHAR DEFAULT 'KM' NOT NULL,
+                        interval_value FLOAT NOT NULL,
+                        last_service_value FLOAT DEFAULT 0.0 NOT NULL,
+                        next_service_value FLOAT NOT NULL,
+                        due_date TIMESTAMP WITH TIME ZONE,
+                        notes TEXT,
+                        is_active BOOLEAN DEFAULT TRUE NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_maint_plans_device ON maintenance_plans(device_id, is_active);"))
+
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS maintenance_logs (
+                        id SERIAL PRIMARY KEY,
+                        plan_id INTEGER REFERENCES maintenance_plans(id) ON DELETE CASCADE,
+                        device_id VARCHAR NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                        executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        executed_value FLOAT NOT NULL,
+                        workshop VARCHAR,
+                        cost FLOAT DEFAULT 0.0,
+                        notes TEXT
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_maint_logs_device ON maintenance_logs(device_id, executed_at DESC);"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")

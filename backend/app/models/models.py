@@ -87,3 +87,46 @@ class DeviceState(Base):
     calibrated_odometer_km = Column(Float, default=0.0, nullable=False)
     total_idling_hours = Column(Float, default=0.0, nullable=False)
     last_idling_start = Column(DateTime(timezone=True), nullable=True)
+
+class VehicleAlert(Base):
+    __tablename__ = "vehicle_alerts"
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False, index=True)
+    alert_type = Column(String, nullable=False) # LOW_BATTERY, CRITICAL_BATTERY, POWER_CUT, OVERSPEED, TOWING, ALTERNATOR_FAIL
+    severity = Column(String, default="WARNING", nullable=False) # INFO, WARNING, CRITICAL
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    message = Column(String, nullable=False)
+    value = Column(Float, nullable=True)
+    resolved = Column(Boolean, default=False, nullable=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(String, nullable=True)
+
+class MaintenancePlan(Base):
+    __tablename__ = "maintenance_plans"
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    service_type = Column(String, default="KM", nullable=False) # "KM", "HOURS", "DATE"
+    interval_value = Column(Float, nullable=False) # ej. 10000 km o 250 hs
+    last_service_value = Column(Float, default=0.0, nullable=False)
+    next_service_value = Column(Float, nullable=False)
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    logs = relationship("MaintenanceLog", back_populates="plan", cascade="all, delete-orphan")
+
+class MaintenanceLog(Base):
+    __tablename__ = "maintenance_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("maintenance_plans.id", ondelete="CASCADE"), nullable=True)
+    device_id = Column(String, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False, index=True)
+    executed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    executed_value = Column(Float, nullable=False) # Odómetro o horas al realizarlo
+    workshop = Column(String, nullable=True) # Taller / Mecánico
+    cost = Column(Float, default=0.0, nullable=True)
+    notes = Column(String, nullable=True)
+
+    plan = relationship("MaintenancePlan", back_populates="logs")
+

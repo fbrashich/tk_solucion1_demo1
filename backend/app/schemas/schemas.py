@@ -169,3 +169,109 @@ class TelemetryEventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ==========================================
+# ETAPA 4: ALERTAS Y MANTENIMIENTO PREVENTIVO
+# ==========================================
+
+class VehicleAlertResponse(BaseModel):
+    id: int
+    device_id: str
+    alert_type: str
+    severity: str # INFO | WARNING | CRITICAL
+    timestamp: datetime
+    message: str
+    value: Optional[float] = None
+    resolved: bool
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class AlertResolveRequest(BaseModel):
+    notes: Optional[str] = None
+
+class MaintenancePlanBase(BaseModel):
+    title: str = Field(..., min_length=2, max_length=150)
+    service_type: str = "KM" # "KM" | "HOURS" | "DATE"
+    interval_value: float = Field(..., gt=0)
+    last_service_value: float = 0.0
+    next_service_value: Optional[float] = None
+    due_date: Optional[datetime] = None
+    notes: Optional[str] = None
+    is_active: bool = True
+
+    @field_validator('title', 'service_type', 'notes', mode='before')
+    @classmethod
+    def sanitize_strings(cls, v):
+        if isinstance(v, str):
+            if re.search(r'[<>]', v):
+                raise ValueError("No se permiten caracteres HTML o scripts (<, >)")
+            return v.strip()
+        return v
+
+class MaintenancePlanCreate(MaintenancePlanBase):
+    pass
+
+class MaintenancePlanUpdate(BaseModel):
+    title: Optional[str] = None
+    service_type: Optional[str] = None
+    interval_value: Optional[float] = None
+    last_service_value: Optional[float] = None
+    next_service_value: Optional[float] = None
+    due_date: Optional[datetime] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    @field_validator('title', 'service_type', 'notes', mode='before')
+    @classmethod
+    def sanitize_strings(cls, v):
+        if isinstance(v, str):
+            if re.search(r'[<>]', v):
+                raise ValueError("No se permiten caracteres HTML o scripts (<, >)")
+            return v.strip()
+        return v
+
+class MaintenancePlanResponse(MaintenancePlanBase):
+    id: int
+    device_id: str
+    created_at: datetime
+    current_vehicle_value: Optional[float] = 0.0
+    remaining_value: Optional[float] = 0.0
+    progress_percentage: Optional[float] = 0.0
+    status: Optional[str] = "OK" # "OK" | "WARNING" | "OVERDUE"
+    status_label: Optional[str] = None
+    status_color: Optional[str] = "emerald"
+
+    class Config:
+        from_attributes = True
+
+class MaintenanceRecordServiceRequest(BaseModel):
+    executed_value: Optional[float] = None # Si es null se toma el odómetro/horas actual del vehículo
+    workshop: Optional[str] = None
+    cost: Optional[float] = 0.0
+    notes: Optional[str] = None
+
+    @field_validator('workshop', 'notes', mode='before')
+    @classmethod
+    def sanitize_strings(cls, v):
+        if isinstance(v, str):
+            if re.search(r'[<>]', v):
+                raise ValueError("No se permiten caracteres HTML o scripts (<, >)")
+            return v.strip()
+        return v
+
+class MaintenanceLogResponse(BaseModel):
+    id: int
+    plan_id: Optional[int] = None
+    device_id: str
+    executed_at: datetime
+    executed_value: float
+    workshop: Optional[str] = None
+    cost: Optional[float] = 0.0
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+

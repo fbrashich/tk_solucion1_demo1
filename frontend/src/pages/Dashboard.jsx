@@ -14,6 +14,8 @@ import { useTheme } from '../context/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
 import LiveConsoleModal from '../components/LiveConsoleModal';
 import DeviceCalibrationModal from '../components/DeviceCalibrationModal';
+import AlertNotificationBell from '../components/AlertNotificationBell';
+import MaintenancePlannerModal from '../components/MaintenancePlannerModal';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -21,7 +23,7 @@ import {
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
   Trash2, X, Smartphone, Satellite, Info, HardDrive,
-  Battery, Signal, Code, Pencil, Settings, Zap, Sliders
+  Battery, Signal, Code, Pencil, Settings, Zap, Sliders, Wrench
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -117,6 +119,7 @@ export default function Dashboard() {
   const [selectedRawData, setSelectedRawData] = useState(null);
   const [isLiveConsoleOpen, setIsLiveConsoleOpen] = useState(false);
   const [showCalibrationModal, setShowCalibrationModal] = useState(false);
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
 
   // Estado para gestión de dispositivos por el Operador (CRUD Completo)
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -522,6 +525,16 @@ export default function Dashboard() {
               </button>
             )}
 
+            {/* Botón Gestión de Mantenimiento Preventivo (Etapa 4) */}
+            <button
+              onClick={() => setShowMaintenanceModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 active:scale-95 border border-amber-500/30 text-xs font-bold text-amber-300 transition-all cursor-pointer shadow-sm hover:shadow-amber-950/30"
+              title="Gestionar Planes y Servicios de Mantenimiento Preventivo"
+            >
+              <Wrench className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Mantenimiento</span>
+            </button>
+
             {/* Botón de Exportar Datos CSV */}
             <button
               onClick={handleExportCSV}
@@ -563,6 +576,11 @@ export default function Dashboard() {
               <Satellite className="w-3.5 h-3.5 text-purple-400" />
               <span className="hidden sm:inline">Traccar</span>
             </a>
+
+            {/* Campana de Notificación y Gestión de Alertas en Tiempo Real (Etapa 4) */}
+            <AlertNotificationBell 
+              selectedDeviceId={selectedDeviceId} 
+            />
 
             {/* Selector de Tema (Modo Claro / Modo Oscuro) */}
             <ThemeToggle />
@@ -875,6 +893,16 @@ export default function Dashboard() {
               >
                 <Sliders className="w-4 h-4" />
                 <span>Calibrar Tablero</span>
+              </button>
+
+              {/* Botón Gestión de Mantenimiento Preventivo (Etapa 4) */}
+              <button
+                onClick={() => setShowMaintenanceModal(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer shadow-md active:scale-95"
+                title="Planes de mantenimiento preventivo del vehículo"
+              >
+                <Wrench className="w-4 h-4 text-amber-400" />
+                <span>Mantenimiento</span>
               </button>
 
               {/* Botón para ver Telemetría Cruda (JSON) */}
@@ -2050,6 +2078,16 @@ export default function Dashboard() {
         device={currentDeviceObj}
         status={singleStatus}
         onSuccess={() => fetchAllData(true)}
+      />
+
+      {/* Modal de Mantenimiento Preventivo (Etapa 4) */}
+      <MaintenancePlannerModal
+        isOpen={showMaintenanceModal}
+        onClose={() => setShowMaintenanceModal(false)}
+        selectedDeviceId={selectedDeviceId}
+        deviceList={deviceList}
+        currentOdoKm={calibratedOdoKm}
+        currentEngineHours={totalHours}
       />
 
     </div>

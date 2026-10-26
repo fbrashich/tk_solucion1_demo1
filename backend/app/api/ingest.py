@@ -17,6 +17,7 @@ from app.services.fmc150_decoder import (
     determine_operating_status,
     evaluate_battery_health
 )
+from app.services.alert_engine import process_and_persist_alerts
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -282,12 +283,24 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
 
         is_idling = ignition and speed_kmh < 3.0 and not motion
 
+        # Evaluación síncrona de alertas operativas (Etapa 4)
+        active_alerts = await process_and_persist_alerts(
+            db=db,
+            device_id=local_device.device_id,
+            power_voltage=power_val,
+            ignition=ignition,
+            speed_kmh=speed_kmh,
+            motion=motion,
+            timestamp=fix_time
+        )
+
         # Enriquecer payload normalizado
         enriched_raw["normalized"]["operating_status"] = op_code
         enriched_raw["normalized"]["operating_status_label"] = op_label
         enriched_raw["normalized"]["operating_status_color"] = op_color
         enriched_raw["normalized"]["calibrated_odometer_km"] = calibrated_odo
         enriched_raw["normalized"]["battery_health"] = bat_health
+        enriched_raw["normalized"]["alerts_triggered"] = len(active_alerts)
 
         # Registrar evento de telemetría histórico o en tiempo real
         new_event = TelemetryEvent(
