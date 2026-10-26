@@ -71,3 +71,27 @@ Se ejecutó la suite consolidada de pruebas unitarias sobre el backend:
 5. `test_stage5_geofences_and_notifications.py`: 12 tests (100% PASS)
 
 > **Total Consolidado:** **48 pruebas unitarias aprobadas al 100%** en 0.036 segundos.
+
+---
+
+## 3. Despliegue y Certificación en Servidor de Producción (Raspberry Pi 4B - `172.16.22.2`)
+
+* **Identificación del Servidor:**
+  - IP LAN: `172.16.22.2` (acceso SSH vía clave `id_ed25519_tokioba`, usuario `iot_admin_srv`).
+  - Almacenamiento: Repositorio en SSD de alta velocidad `/mnt/ssd/tokioba-iot`.
+* **Causa Raíz Diagnosticada de la Ausencia del Botón Geocercas:**
+  - El volumen de Nginx `telemetry_web` montaba estáticamente `/mnt/ssd/tokioba-iot/frontend/dist` compilado el 21 de octubre (hace 5 días).
+  - La tarjeta SD (`/dev/mmcblk0p2`) se encontraba al 96% de capacidad por caché acumulada de compilaciones anteriores (`docker builder`), lo que provocaba errores `no space left on device` al ejecutar comandos de snapshot.
+* **Soluciones y Acciones Aplicadas:**
+  1. `docker builder prune -a -f`: Liberación de 907 MB en la tarjeta SD de la Pi.
+  2. Construcción de la imagen actualizada `tokioba-iot-api:latest` (`v0.5.0-dev`).
+  3. Compilación optimizada del frontend (`vite build`) en contenedor `node:22-alpine` generando el nuevo bundle de producción (`dist/assets/index-1YbNCHdX.js`).
+  4. Migraciones DDL aplicadas en `telemetry_db` (creación de tablas `geofences`, `geofence_events` e índices).
+  5. Contenedores reiniciados y operativos: `telemetry_api`, `telemetry_web`, `telemetry_gateway`, `telemetry_traccar`, `telemetry_db`.
+* **Verificación Web Simulada en Vivo:**
+  - Login exitoso con credenciales `fabianb@tokioba.com` / `fabian123`.
+  - Botón **`Geocercas`** presente y destacado en la barra de navegación superior.
+  - Botón **`+ Geocercas`** visible en el encabezado de la tarjeta del mapa (`Mapa de Toda la Flota`).
+  - Tarjeta *"Zona Operativa"* correctamente oculta en la vista global (`Toda la Flota`) según especificación.
+  - Apertura y renderizado completo del modal *"Gestor de Geocercas Inteligentes"* con diseñador Leaflet sin marcas de agua.
+
