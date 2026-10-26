@@ -99,4 +99,5 @@ Se ejecutó la suite consolidada de pruebas unitarias sobre el backend:
   - Apertura y renderizado completo del modal *"Gestor de Geocercas Inteligentes"* con diseñador Leaflet sin marcas de agua.
   - **Centrado Automático por Vehículo Verificado:** Al seleccionar *Van Operarios* (`FMC150_331`), el modal centra en sus coordenadas exactas (`-34.5496, -58.4948`), zoom 15, con marcador cian de radar y HUD contextual.
   - **Centrado Automático por IP del Usuario Verificado:** Al seleccionar *Toda la Flota*, el modal consulta la IP pública del usuario (`190.225.66.150`), centrando en su ubicación aproximada (Olivos / Buenos Aires, `-34.5087, -58.4802`), zoom 13, con marcador de brújula azul y HUD informativo.
+  - **Autocentrado Único en Carga / Sin Snap-Back Verificado:** El autocentrado opera estrictamente en la carga inicial o apertura de la creación de la geocerca. El operador puede desplazar el mapa libremente por cualquier región o distancia y colocar múltiples vértices de polígonos o centros de círculos sin que el mapa vuelva a centrarse forzosamente. Botón manual `[Centrar]` disponible en el HUD si el usuario desea recentrar a demanda.
 
