@@ -2130,6 +2130,29 @@ export default function Dashboard() {
         trip={playbackTrip}
       />
 
+      {/* Footer Industrial con Versión SemVer y Trazabilidad del Producto */}
+      <footer className="border-t border-slate-900 bg-slate-950/80 px-4 py-3 mt-auto">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-400">Tokioba Telematics Platform</span>
+            <span>•</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-[11px] font-mono text-cyan-400 font-bold">
+              v0.5.0-dev
+            </span>
+            <span className="text-slate-600 hidden md:inline">Sprint 1 (Geofencing & Alerts Dispatcher)</span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+            <span>Teltonika FMC150 IoT Core</span>
+            <span>•</span>
+            <span className="text-emerald-500 font-medium flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Nodo En Línea
+            </span>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 }
+

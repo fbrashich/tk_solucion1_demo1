@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     TRACCAR_USER: str = os.getenv("TRACCAR_USER", os.getenv("TRACCAR_EMAIL", "admin@tokioba.com"))
     TRACCAR_PASSWORD: str = os.getenv("TRACCAR_PASSWORD", "tokioba_admin_2026")
 
+    # Versionado del Producto (Semantic Versioning 2.0.0)
+    VERSION: str = "0.5.0-dev"
+    RELEASE_NAME: str = "Geofencing & Alerts Dispatcher"
+    RELEASE_STAGE: str = "development"
+    BUILD_DATE: str = "2026-10-25T21:50:00Z"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+
     # Para poder tomar variables de entorno del sistema automáticamente
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

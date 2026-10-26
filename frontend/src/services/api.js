@@ -230,5 +230,14 @@ export const deleteTrip = async (tripId) => {
   return response.data;
 };
 
+// ==============================================================================
+// INFORMACIÓN DEL SISTEMA Y VERSIONADO
+// ==============================================================================
+export const getSystemVersion = async () => {
+  const response = await api.get('/version');
+  return response.data;
+};
+
 export default api;
+
 
