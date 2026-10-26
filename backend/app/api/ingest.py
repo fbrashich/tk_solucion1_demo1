@@ -10,7 +10,13 @@ from app.db import get_db
 from app.models.models import TelemetryEvent, DeviceState, Device, User
 from app.schemas.schemas import IngestPayload
 from app.services.live_stream import live_manager
-from app.services.fmc150_decoder import decode_fmc150_telemetry, sanitize_string_spaces, safe_coalesce
+from app.services.fmc150_decoder import (
+    decode_fmc150_telemetry, 
+    sanitize_string_spaces, 
+    safe_coalesce,
+    determine_operating_status,
+    evaluate_battery_health
+)
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -242,6 +248,7 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
 
         is_newer = False
         delta_hours = 0.0
+        delta_seconds = 0.0
 
         if not device_state or device_state.last_updated is None:
             is_newer = True
@@ -256,6 +263,31 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             else:
                 # Paquete histórico/desordenado: no sumar al horómetro consolidado ni alterar última posición
                 is_newer = False
+
+        # Cálculo de Odómetro Calibrado
+        gps_km = round(total_dist / 1000.0, 2) if total_dist is not None else 0.0
+        calibrated_odo = round((local_device.odometer_offset_km or 0.0) + gps_km, 2)
+
+        # Cálculo de Estado Operativo de Negocio y Ralentí
+        now_utc = datetime.now(timezone.utc)
+        op_code, op_label, op_color = determine_operating_status(
+            ignition=ignition,
+            speed_kmh=speed_kmh,
+            motion=motion,
+            sleep_mode=sleep_mode,
+            last_fix_time=fix_time,
+            now_utc=now_utc
+        )
+        bat_health, bat_health_color = evaluate_battery_health(power_val, ignition)
+
+        is_idling = ignition and speed_kmh < 3.0 and not motion
+
+        # Enriquecer payload normalizado
+        enriched_raw["normalized"]["operating_status"] = op_code
+        enriched_raw["normalized"]["operating_status_label"] = op_label
+        enriched_raw["normalized"]["operating_status_color"] = op_color
+        enriched_raw["normalized"]["calibrated_odometer_km"] = calibrated_odo
+        enriched_raw["normalized"]["battery_health"] = bat_health
 
         # Registrar evento de telemetría histórico o en tiempo real
         new_event = TelemetryEvent(
@@ -292,7 +324,11 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
                 internal_battery=battery_val,
                 sleep_mode=sleep_mode,
                 gnss_status=gnss_status,
-                network_operator=operator_name
+                network_operator=operator_name,
+                operating_status=op_code,
+                calibrated_odometer_km=calibrated_odo,
+                total_idling_hours=round(delta_seconds / 3600.0, 4) if (is_idling and delta_seconds > 0) else 0.0,
+                last_idling_start=fix_time if is_idling else None
             )
             db.add(device_state)
         elif is_newer:
@@ -313,6 +349,18 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
             device_state.sleep_mode = sleep_mode
             device_state.gnss_status = gnss_status
             device_state.network_operator = operator_name
+            device_state.operating_status = op_code
+            device_state.calibrated_odometer_km = calibrated_odo
+
+            if is_idling:
+                if not device_state.last_idling_start:
+                    device_state.last_idling_start = fix_time
+                if delta_seconds > 0 and delta_seconds <= 3600:
+                    device_state.total_idling_hours = round(
+                        (device_state.total_idling_hours or 0.0) + (delta_seconds / 3600.0), 4
+                    )
+            else:
+                device_state.last_idling_start = None
 
         processed_count += 1
 

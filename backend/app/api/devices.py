@@ -17,10 +17,17 @@ from app.schemas.schemas import (
     DeviceResponse,
     DeviceCreate,
     DeviceUpdate,
+    DeviceCalibrationUpdate,
     FleetSummaryResponse
 )
 from app.api.deps import get_current_user, get_current_admin
 from app.services.traccar_client import traccar_client
+from app.services.fmc150_decoder import (
+    determine_operating_status,
+    evaluate_battery_health,
+    decode_sleep_mode,
+    decode_gnss_status
+)
 
 logger = logging.getLogger("devices")
 router = APIRouter()
@@ -32,26 +39,58 @@ def ensure_utc(dt: datetime) -> datetime:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
 
-def calculate_status(last_event: Optional[TelemetryEvent], last_updated: Optional[datetime], now: datetime):
+def calculate_status(
+    last_event: Optional[TelemetryEvent], 
+    last_updated: Optional[datetime], 
+    now: datetime,
+    dev_state: Optional[DeviceState] = None
+):
     if not last_event:
-        return "SIN COMUNICACIÓN", False, ensure_utc(last_updated)
+        return "SIN COMUNICACIÓN", False, ensure_utc(last_updated), "DISCONNECTED", "SIN COMUNICACIÓN", "#f43f5e"
     
     last_dt = ensure_utc(last_event.timestamp)
-    diff_seconds = (now - last_dt).total_seconds()
+    diff_seconds = (now - last_dt).total_seconds() if last_dt else 0.0
     if diff_seconds < 0:
         diff_seconds = 0.0
-    diff_minutes = diff_seconds / 60.0
 
     ignition_val = bool(last_event.ignition_state)
+    speed_kmh = float(last_event.speed or (dev_state.last_speed if dev_state else 0.0) or 0.0)
 
-    if diff_minutes > 10.0:
-        status_str = "SIN COMUNICACIÓN"
-    elif ignition_val and diff_minutes <= 5.0:
+    raw = last_event.raw_data or (dev_state.last_raw_data if dev_state else {}) or {}
+    norm = raw.get("normalized") or {}
+    attrs = raw.get("attributes") or {}
+
+    motion_val = bool(
+        norm.get("motion") is True or 
+        attrs.get("motion") is True or 
+        attrs.get("io240") == 1 or 
+        speed_kmh >= 3.0
+    )
+
+    sleep_mode = (
+        last_event.sleep_mode if last_event.sleep_mode is not None 
+        else (dev_state.sleep_mode if dev_state and dev_state.sleep_mode is not None 
+        else norm.get("sleep_mode"))
+    )
+
+    op_code, op_label, op_color = determine_operating_status(
+        ignition=ignition_val,
+        speed_kmh=speed_kmh,
+        motion=motion_val,
+        sleep_mode=sleep_mode,
+        last_fix_time=last_dt,
+        now_utc=now
+    )
+
+    # Compatibilidad con los 3 estados tradicionales
+    if op_code in ("MOVING", "IDLING"):
         status_str = "OPERANDO"
-    else:
+    elif op_code in ("PARKED_SLEEP", "TOWING"):
         status_str = "DETENIDA"
+    else:
+        status_str = "SIN COMUNICACIÓN"
 
-    return status_str, ignition_val, last_dt
+    return status_str, ignition_val, last_dt, op_code, op_label, op_color
 
 # ==========================================
 # 1. CRUD DE DISPOSITIVOS
@@ -219,6 +258,10 @@ async def update_device(
         device.sim_phone = payload.sim_phone.strip() if payload.sim_phone else None
     if payload.category is not None:
         device.category = payload.category.strip() if payload.category else "machinery"
+    if payload.odometer_offset_km is not None:
+        device.odometer_offset_km = max(0.0, float(payload.odometer_offset_km))
+    if payload.engine_hours_offset is not None:
+        device.engine_hours_offset = max(0.0, float(payload.engine_hours_offset))
 
     await db.commit()
     await db.refresh(device)
@@ -247,6 +290,62 @@ async def update_device(
     except Exception as e:
         logger.warning(f"[DEVICES] Error propagando actualización hacia Traccar ({new_unique_id}): {e}")
 
+    return device
+
+@router.put("/{device_id}/calibration", response_model=DeviceResponse)
+async def update_device_calibration(
+    device_id: str,
+    payload: DeviceCalibrationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Device).where(Device.device_id == device_id))
+    device = result.scalars().first()
+    if not device:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+
+    if current_user.role != "admin" and device.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar este equipo")
+
+    state_res = await db.execute(select(DeviceState).where(DeviceState.device_id == device_id))
+    device_state = state_res.scalars().first()
+    current_engine_hours = device_state.engine_hours if device_state else 0.0
+
+    # Obtener totalDistance del último evento
+    ev_res = await db.execute(
+        select(TelemetryEvent)
+        .where(TelemetryEvent.device_id == device_id)
+        .order_by(desc(TelemetryEvent.timestamp))
+        .limit(1)
+    )
+    last_event = ev_res.scalars().first()
+    raw = last_event.raw_data if last_event else {}
+    norm = raw.get("normalized") if raw else {}
+    attrs = raw.get("attributes") if raw else {}
+    total_dist = (norm.get("totalDistance") if norm else None) or (attrs.get("totalDistance") if attrs else None)
+    gps_km = round(float(total_dist) / 1000.0, 2) if total_dist is not None else 0.0
+
+    # 1. Calibración de Odómetro
+    if payload.current_dashboard_odometer_km is not None:
+        calc_offset = max(0.0, payload.current_dashboard_odometer_km - gps_km)
+        device.odometer_offset_km = round(calc_offset, 2)
+    elif payload.odometer_offset_km is not None:
+        device.odometer_offset_km = round(max(0.0, payload.odometer_offset_km), 2)
+
+    # 2. Calibración de Horómetro
+    if payload.current_dashboard_engine_hours is not None:
+        calc_hours_offset = max(0.0, payload.current_dashboard_engine_hours - current_engine_hours)
+        device.engine_hours_offset = round(calc_hours_offset, 2)
+    elif payload.engine_hours_offset is not None:
+        device.engine_hours_offset = round(max(0.0, payload.engine_hours_offset), 2)
+
+    # Actualizar estado consolidado en DeviceState
+    if device_state:
+        device_state.calibrated_odometer_km = round(device.odometer_offset_km + gps_km, 2)
+
+    await db.commit()
+    await db.refresh(device)
+    logger.info(f"[CALIBRATION] Equipo {device_id} calibrado: offset_odo={device.odometer_offset_km}km, offset_hs={device.engine_hours_offset}hs")
     return device
 
 @router.delete("/{device_id}")
@@ -339,16 +438,32 @@ async def get_all_devices_status(
         )
         last_event = ev_res.scalars().first()
 
-        status_str, ignition_val, last_dt = calculate_status(
-            last_event, dev_state.last_updated if dev_state else None, now
+        status_str, ignition_val, last_dt, op_code, op_label, op_color = calculate_status(
+            last_event, dev_state.last_updated if dev_state else None, now, dev_state
         )
 
-        if status_str == "OPERANDO":
+        if op_code in ("MOVING", "IDLING"):
             op_count += 1
-        elif status_str == "DETENIDA":
+        elif op_code in ("PARKED_SLEEP", "TOWING"):
             det_count += 1
         else:
             no_comm_count += 1
+
+        # Odómetro virtual GPS
+        raw_info = dev_state.last_raw_data if dev_state and dev_state.last_raw_data else (last_event.raw_data if last_event else {})
+        norm_info = raw_info.get("normalized") or {}
+        attrs_info = raw_info.get("attributes") or {}
+        tot_dist_m = norm_info.get("totalDistance") or attrs_info.get("totalDistance")
+        gps_km = round(float(tot_dist_m) / 1000.0, 2) if tot_dist_m is not None else 0.0
+        calibrated_odo = round((dev_obj.odometer_offset_km or 0.0) + gps_km, 2)
+        if calibrated_odo == 0.0 and dev_state and dev_state.calibrated_odometer_km:
+            calibrated_odo = dev_state.calibrated_odometer_km
+
+        calibrated_hs = round(engine_hours + (dev_obj.engine_hours_offset or 0.0), 2)
+        power_val = dev_state.external_power if dev_state else (last_event.external_power if last_event else None)
+        bat_health, bat_health_color = evaluate_battery_health(power_val, ignition_val)
+        sleep_val = dev_state.sleep_mode if dev_state else (last_event.sleep_mode if last_event else None)
+        gnss_val = dev_state.gnss_status if dev_state else (last_event.gnss_status if last_event else None)
 
         device_statuses.append(DeviceStatusResponse(
             device_id=dev_id,
@@ -361,12 +476,24 @@ async def get_all_devices_status(
             engine_hours=engine_hours,
             last_updated=last_dt,
             last_speed=dev_state.last_speed if dev_state else (last_event.speed if last_event else None),
-            raw_data=dev_state.last_raw_data if dev_state else (last_event.raw_data if last_event else None),
-            external_power=dev_state.external_power if dev_state else (last_event.external_power if last_event else None),
+            raw_data=raw_info,
+            external_power=power_val,
             internal_battery=dev_state.internal_battery if dev_state else (last_event.internal_battery if last_event else None),
-            sleep_mode=dev_state.sleep_mode if dev_state else (last_event.sleep_mode if last_event else None),
-            gnss_status=dev_state.gnss_status if dev_state else (last_event.gnss_status if last_event else None),
-            network_operator=dev_state.network_operator if dev_state else (last_event.network_operator if last_event else None)
+            sleep_mode=sleep_val,
+            gnss_status=gnss_val,
+            network_operator=dev_state.network_operator if dev_state else (last_event.network_operator if last_event else None),
+            operating_status=op_code,
+            operating_status_label=op_label,
+            operating_status_color=op_color,
+            calibrated_odometer_km=calibrated_odo,
+            total_idling_hours=round(dev_state.total_idling_hours, 2) if dev_state and dev_state.total_idling_hours else 0.0,
+            odometer_offset_km=round(dev_obj.odometer_offset_km or 0.0, 2),
+            engine_hours_offset=round(dev_obj.engine_hours_offset or 0.0, 2),
+            calibrated_engine_hours=calibrated_hs,
+            battery_health=bat_health,
+            battery_health_color=bat_health_color,
+            sleep_mode_desc=decode_sleep_mode(sleep_val)[1] if sleep_val is not None else None,
+            gnss_status_desc=decode_gnss_status(gnss_val)[1] if gnss_val is not None else None
         ))
 
     return FleetSummaryResponse(
@@ -409,11 +536,29 @@ async def get_device_status(
     last_event = result_event.scalars().first()
 
     now = datetime.now(timezone.utc)
-    status_str, ignition_val, last_dt = calculate_status(
+    status_str, ignition_val, last_dt, op_code, op_label, op_color = calculate_status(
         last_event, 
         device_state.last_updated if device_state else None, 
-        now
+        now,
+        device_state
     )
+
+    # Odómetro virtual GPS
+    raw_info = device_state.last_raw_data if device_state and device_state.last_raw_data else (last_event.raw_data if last_event else {})
+    norm_info = raw_info.get("normalized") or {}
+    attrs_info = raw_info.get("attributes") or {}
+    tot_dist_m = norm_info.get("totalDistance") or attrs_info.get("totalDistance")
+    gps_km = round(float(tot_dist_m) / 1000.0, 2) if tot_dist_m is not None else 0.0
+    calibrated_odo = round((device.odometer_offset_km or 0.0) + gps_km, 2)
+    if calibrated_odo == 0.0 and device_state and device_state.calibrated_odometer_km:
+        calibrated_odo = device_state.calibrated_odometer_km
+
+    engine_hours_base = round(device_state.engine_hours, 2) if device_state else 0.0
+    calibrated_hs = round(engine_hours_base + (device.engine_hours_offset or 0.0), 2)
+    power_val = device_state.external_power if device_state else (last_event.external_power if last_event else None)
+    bat_health, bat_health_color = evaluate_battery_health(power_val, ignition_val)
+    sleep_val = device_state.sleep_mode if device_state else (last_event.sleep_mode if last_event else None)
+    gnss_val = device_state.gnss_status if device_state else (last_event.gnss_status if last_event else None)
 
     return DeviceStatusResponse(
         device_id=device_id,
@@ -423,15 +568,27 @@ async def get_device_status(
         ignition=ignition_val,
         last_lat=last_event.latitude if last_event else None,
         last_lon=last_event.longitude if last_event else None,
-        engine_hours=round(device_state.engine_hours, 2) if device_state else 0.0,
+        engine_hours=engine_hours_base,
         last_updated=last_dt,
         last_speed=device_state.last_speed if device_state else (last_event.speed if last_event else None),
-        raw_data=device_state.last_raw_data if device_state else (last_event.raw_data if last_event else None),
-        external_power=device_state.external_power if device_state else (last_event.external_power if last_event else None),
+        raw_data=raw_info,
+        external_power=power_val,
         internal_battery=device_state.internal_battery if device_state else (last_event.internal_battery if last_event else None),
-        sleep_mode=device_state.sleep_mode if device_state else (last_event.sleep_mode if last_event else None),
-        gnss_status=device_state.gnss_status if device_state else (last_event.gnss_status if last_event else None),
-        network_operator=device_state.network_operator if device_state else (last_event.network_operator if last_event else None)
+        sleep_mode=sleep_val,
+        gnss_status=gnss_val,
+        network_operator=device_state.network_operator if device_state else (last_event.network_operator if last_event else None),
+        operating_status=op_code,
+        operating_status_label=op_label,
+        operating_status_color=op_color,
+        calibrated_odometer_km=calibrated_odo,
+        total_idling_hours=round(device_state.total_idling_hours, 2) if device_state and device_state.total_idling_hours else 0.0,
+        odometer_offset_km=round(device.odometer_offset_km or 0.0, 2),
+        engine_hours_offset=round(device.engine_hours_offset or 0.0, 2),
+        calibrated_engine_hours=calibrated_hs,
+        battery_health=bat_health,
+        battery_health_color=bat_health_color,
+        sleep_mode_desc=decode_sleep_mode(sleep_val)[1] if sleep_val is not None else None,
+        gnss_status_desc=decode_gnss_status(gnss_val)[1] if gnss_val is not None else None
     )
 
 @router.get("/{device_id}/logs", response_model=List[TelemetryEventResponse])

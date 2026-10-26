@@ -57,6 +57,15 @@ async def init_db():
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS sleep_mode INTEGER;"))
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS gnss_status INTEGER;"))
                 await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS network_operator VARCHAR;"))
+
+                # Etapa 2: Offsets de calibración y estados operativos de negocio
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS odometer_offset_km FLOAT DEFAULT 0.0;"))
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS engine_hours_offset FLOAT DEFAULT 0.0;"))
+
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS operating_status VARCHAR DEFAULT 'DISCONNECTED';"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS calibrated_odometer_km FLOAT DEFAULT 0.0;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS total_idling_hours FLOAT DEFAULT 0.0;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_idling_start TIMESTAMP WITH TIME ZONE;"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")

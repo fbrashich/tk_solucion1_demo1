@@ -49,6 +49,8 @@ class DeviceBase(BaseModel):
     traccar_model: Optional[str] = None
     sim_phone: Optional[str] = None
     category: Optional[str] = "machinery"
+    odometer_offset_km: Optional[float] = 0.0
+    engine_hours_offset: Optional[float] = 0.0
 
     @field_validator('device_id', 'name', 'type', 'description', 'traccar_model', 'sim_phone', mode='before')
     @classmethod
@@ -71,6 +73,8 @@ class DeviceUpdate(BaseModel):
     traccar_model: Optional[str] = None
     sim_phone: Optional[str] = None
     category: Optional[str] = None
+    odometer_offset_km: Optional[float] = None
+    engine_hours_offset: Optional[float] = None
 
     @field_validator('name', 'type', 'description', 'traccar_model', 'sim_phone', mode='before')
     @classmethod
@@ -80,6 +84,12 @@ class DeviceUpdate(BaseModel):
                 raise ValueError("No se permiten caracteres HTML o scripts (<, >)")
             return v.strip()
         return v
+
+class DeviceCalibrationUpdate(BaseModel):
+    odometer_offset_km: Optional[float] = None
+    engine_hours_offset: Optional[float] = None
+    current_dashboard_odometer_km: Optional[float] = None
+    current_dashboard_engine_hours: Optional[float] = None
 
 class DeviceResponse(DeviceBase):
     id: int
@@ -104,7 +114,7 @@ class DeviceStatusResponse(BaseModel):
     device_id: str
     name: Optional[str] = None
     type: Optional[str] = None
-    status: str # "OPERANDO" | "DETENIDA" | "SIN COMUNICACIÓN"
+    status: str # "OPERANDO" | "DETENIDA" | "SIN COMUNICACIÓN" o semántico
     ignition: Optional[bool] = None
     last_lat: Optional[float] = None
     last_lon: Optional[float] = None
@@ -117,6 +127,20 @@ class DeviceStatusResponse(BaseModel):
     sleep_mode: Optional[int] = None
     gnss_status: Optional[int] = None
     network_operator: Optional[str] = None
+
+    # Métricas operativas de negocio y calibración (Etapa 2)
+    operating_status: Optional[str] = "DISCONNECTED" # "MOVING" | "IDLING" | "PARKED_SLEEP" | "TOWING" | "DISCONNECTED"
+    operating_status_label: Optional[str] = "SIN COMUNICACIÓN"
+    operating_status_color: Optional[str] = "#f43f5e"
+    calibrated_odometer_km: Optional[float] = 0.0
+    total_idling_hours: Optional[float] = 0.0
+    odometer_offset_km: Optional[float] = 0.0
+    engine_hours_offset: Optional[float] = 0.0
+    calibrated_engine_hours: Optional[float] = 0.0
+    battery_health: Optional[str] = None
+    battery_health_color: Optional[str] = None
+    sleep_mode_desc: Optional[str] = None
+    gnss_status_desc: Optional[str] = None
 
 class FleetSummaryResponse(BaseModel):
     total_devices: int

@@ -79,6 +79,11 @@ export const deleteDevice = async (deviceId) => {
   return response.data;
 };
 
+export const updateDeviceCalibration = async (deviceId, calibrationData) => {
+  const response = await api.put(`/devices/${deviceId}/calibration`, calibrationData);
+  return response.data;
+};
+
 export const getAllDevicesStatus = async () => {
   const response = await api.get('/devices/status/all');
   return response.data;

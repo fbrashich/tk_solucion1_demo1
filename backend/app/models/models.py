@@ -32,6 +32,10 @@ class Device(Base):
     sim_phone = Column(String, nullable=True) # Número SIM
     category = Column(String, default="machinery", nullable=True) # Categoría Traccar
 
+    # Offsets de calibración con tablero físico (Etapa 2)
+    odometer_offset_km = Column(Float, default=0.0, nullable=False)
+    engine_hours_offset = Column(Float, default=0.0, nullable=False)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class TelemetryEvent(Base):
@@ -77,3 +81,9 @@ class DeviceState(Base):
     sleep_mode = Column(Integer, nullable=True)
     gnss_status = Column(Integer, nullable=True)
     network_operator = Column(String, nullable=True)
+
+    # Métricas operativas de negocio y calibración (Etapa 2)
+    operating_status = Column(String, default="DISCONNECTED", nullable=False)
+    calibrated_odometer_km = Column(Float, default=0.0, nullable=False)
+    total_idling_hours = Column(Float, default=0.0, nullable=False)
+    last_idling_start = Column(DateTime(timezone=True), nullable=True)

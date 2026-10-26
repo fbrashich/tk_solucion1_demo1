@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import ThemeToggle from '../components/ThemeToggle';
 import LiveConsoleModal from '../components/LiveConsoleModal';
+import DeviceCalibrationModal from '../components/DeviceCalibrationModal';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -20,7 +21,7 @@ import {
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
   Trash2, X, Smartphone, Satellite, Info, HardDrive,
-  Battery, Signal, Code, Pencil, Settings, Zap
+  Battery, Signal, Code, Pencil, Settings, Zap, Sliders
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -55,9 +56,18 @@ const createStatusMarkerIcon = (statusStr, isSelected = false) => {
   let color = '#f43f5e';
   let glow = 'rgba(244, 63, 94, 0.4)';
 
-  if (statusStr === 'OPERANDO') {
+  if (statusStr === 'OPERANDO' || statusStr === 'MOVING' || statusStr === 'EN MOVIMIENTO') {
     color = '#10b981';
     glow = 'rgba(16, 185, 129, 0.4)';
+  } else if (statusStr === 'IDLING' || statusStr === 'RALENTÍ') {
+    color = '#f59e0b';
+    glow = 'rgba(245, 158, 11, 0.4)';
+  } else if (statusStr === 'PARKED_SLEEP' || statusStr === 'ESTACIONADO (MODO AHORRO)') {
+    color = '#38bdf8';
+    glow = 'rgba(56, 189, 248, 0.4)';
+  } else if (statusStr === 'TOWING' || statusStr === 'ALERTA REMOLQUE' || statusStr === 'ALERTA REMOLQUE / GRÚA') {
+    color = '#a855f7';
+    glow = 'rgba(168, 85, 247, 0.4)';
   } else if (statusStr === 'DETENIDA') {
     color = '#f59e0b';
     glow = 'rgba(245, 158, 11, 0.4)';
@@ -106,6 +116,7 @@ export default function Dashboard() {
   const [activeMobileTab, setActiveMobileTab] = useState('overview'); // 'overview' | 'logs'
   const [selectedRawData, setSelectedRawData] = useState(null);
   const [isLiveConsoleOpen, setIsLiveConsoleOpen] = useState(false);
+  const [showCalibrationModal, setShowCalibrationModal] = useState(false);
 
   // Estado para gestión de dispositivos por el Operador (CRUD Completo)
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -341,21 +352,43 @@ export default function Dashboard() {
   const isFleetView = selectedDeviceId === 'all';
   const currentDeviceObj = deviceList.find(d => d.device_id === selectedDeviceId);
 
-  // Estado canónico derivado
+  // Estado canónico derivado y semántica operativa (Etapa 2)
+  const opStatus = singleStatus?.operating_status || 'DISCONNECTED';
+  const opStatusLabel = singleStatus?.operating_status_label || (
+    isFleetView 
+      ? (fleetSummary?.operating_count > 0 ? 'OPERANDO' : 'DETENIDA') 
+      : (singleStatus?.status || 'SIN COMUNICACIÓN')
+  );
+  const opStatusColor = singleStatus?.operating_status_color || (
+    opStatus === 'MOVING' ? '#10b981' :
+    opStatus === 'IDLING' ? '#f59e0b' :
+    opStatus === 'PARKED_SLEEP' ? '#38bdf8' :
+    opStatus === 'TOWING' ? '#a855f7' : '#f43f5e'
+  );
+
   const currentStatus = isFleetView 
     ? (fleetSummary?.operating_count > 0 ? 'OPERANDO' : 'DETENIDA') 
-    : (singleStatus?.status || 'SIN COMUNICACIÓN');
+    : (singleStatus?.operating_status_label || singleStatus?.status || 'SIN COMUNICACIÓN');
 
-  const isOperating = currentStatus === 'OPERANDO';
-  const isDetained = currentStatus === 'DETENIDA';
-  const isLostComm = currentStatus === 'SIN COMUNICACIÓN';
+  const isOperating = opStatus === 'MOVING' || (!singleStatus?.operating_status && currentStatus === 'OPERANDO');
+  const isIdling = opStatus === 'IDLING';
+  const isParkedSleep = opStatus === 'PARKED_SLEEP';
+  const isTowing = opStatus === 'TOWING';
+  const isDetained = currentStatus === 'DETENIDA' || isParkedSleep;
+  const isLostComm = opStatus === 'DISCONNECTED' || currentStatus === 'SIN COMUNICACIÓN';
 
-  // Cálculos de horas de motor
+  // Cálculos de horas de motor y odómetro calibrado
   const totalHours = isFleetView 
     ? (fleetSummary?.total_engine_hours || 0)
-    : (singleStatus?.engine_hours || 0);
+    : (singleStatus?.calibrated_engine_hours || singleStatus?.engine_hours || 0);
   const hoursInt = Math.floor(totalHours);
   const minutesInt = Math.round((totalHours - hoursInt) * 60);
+
+  const calibratedOdoKm = isFleetView
+    ? null
+    : (singleStatus?.calibrated_odometer_km ?? (
+        ((singleStatus?.raw_data?.normalized?.totalDistance || singleStatus?.raw_data?.attributes?.totalDistance || 0) / 1000)
+      ));
 
   // Trayectoria GPS para dispositivo individual
   const trajectoryPoints = (!isFleetView ? logs : [])
@@ -477,6 +510,18 @@ export default function Dashboard() {
           {/* Lado Derecho: Export CSV, Refresco y Logout */}
           <div className="flex items-center flex-wrap gap-2 shrink-0 justify-between sm:justify-end">
             
+            {/* Botón Calibrar Tablero (Etapa 2) */}
+            {!isFleetView && (
+              <button
+                onClick={() => setShowCalibrationModal(true)}
+                className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95 border border-cyan-500/30 text-xs font-bold text-cyan-300 transition-all cursor-pointer"
+                title="Calibrar Odómetro y Horómetro con el Tablero Físico del Vehículo"
+              >
+                <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Calibrar Tablero</span>
+              </button>
+            )}
+
             {/* Botón de Exportar Datos CSV */}
             <button
               onClick={handleExportCSV}
@@ -706,11 +751,13 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Batería Principal Vehículo (12V) */}
+              {/* Batería Principal Vehículo (12V) y Salud Eléctrica */}
               <div className="flex items-center gap-2.5">
                 <div className={`p-2 rounded-xl ${
-                  (singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? 0) >= 12.0
+                  (singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? 0) >= 12.3
                     ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                    : (singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? 0) >= 11.8
+                    ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
                     : (singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power) != null
                     ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
                     : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -718,7 +765,20 @@ export default function Dashboard() {
                   <Zap className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Batería 12V</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Batería 12V</span>
+                    {singleStatus.battery_health && (
+                      <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                        singleStatus.battery_health === 'SALUD ÓPTIMA' || singleStatus.battery_health === 'ALTERNADOR CARGANDO'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : singleStatus.battery_health === 'NORMAL / REPOSO'
+                          ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {singleStatus.battery_health}
+                      </span>
+                    )}
+                  </div>
                   <span className="font-mono font-bold text-white text-sm">
                     {(singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? singleStatus.raw_data?.attributes?.power) != null
                       ? `${Number(singleStatus.external_power ?? singleStatus.raw_data?.normalized?.power ?? singleStatus.raw_data?.attributes?.power).toFixed(2)} V`
@@ -785,70 +845,99 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Odómetro / Distancia Total */}
-              {(singleStatus.raw_data?.normalized?.totalDistance ?? singleStatus.raw_data?.attributes?.totalDistance) != null && (
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                    <Compass className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Odómetro GPS</span>
-                    <span className="font-mono font-bold text-cyan-300 text-sm">
-                      {(Number(singleStatus.raw_data?.normalized?.totalDistance ?? singleStatus.raw_data.attributes.totalDistance) / 1000).toFixed(1)} <span className="text-xs text-slate-400 font-normal">km</span>
-                    </span>
-                  </div>
+              {/* Odómetro Calibrado del Vehículo */}
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                  <Compass className="w-4 h-4" />
                 </div>
-              )}
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Odómetro Calibrado</span>
+                    {singleStatus.odometer_offset_km > 0 && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-500/10 text-cyan-400 font-mono">
+                        +{singleStatus.odometer_offset_km.toLocaleString()} km
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold text-cyan-300 text-sm">
+                    {(singleStatus.calibrated_odometer_km ?? (Number(singleStatus.raw_data?.normalized?.totalDistance ?? singleStatus.raw_data?.attributes?.totalDistance ?? 0) / 1000)).toFixed(1)} <span className="text-xs text-slate-400 font-normal">km</span>
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* Botón para ver Telemetría Cruda (JSON) */}
-            {singleStatus.raw_data && (
+            {/* Acciones Rápidas de Telemetría */}
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => setSelectedRawData(singleStatus.raw_data)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-slate-700 transition-all cursor-pointer shadow-md active:scale-95 shrink-0"
-                title="Inspeccionar todos los parámetros telemáticos y entradas/salidas (IOs) recibidas de Traccar"
+                onClick={() => setShowCalibrationModal(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-cyan-500/30 transition-all cursor-pointer shadow-md active:scale-95"
+                title="Calibrar Odómetro y Horómetro con el Tablero Físico del Vehículo"
               >
-                <Code className="w-4 h-4" />
-                <span>Ver Telemetría Cruda (JSON Traccar)</span>
+                <Sliders className="w-4 h-4" />
+                <span>Calibrar Tablero</span>
               </button>
-            )}
+
+              {/* Botón para ver Telemetría Cruda (JSON) */}
+              {singleStatus.raw_data && (
+                <button
+                  onClick={() => setSelectedRawData(singleStatus.raw_data)}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 hover:text-cyan-300 text-xs font-bold border border-slate-700 transition-all cursor-pointer shadow-md active:scale-95 shrink-0"
+                  title="Inspeccionar todos los parámetros telemáticos y entradas/salidas (IOs) recibidas de Traccar"
+                >
+                  <Code className="w-4 h-4" />
+                  <span>Ver Telemetría Cruda (JSON Traccar)</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         {/* Tarjetas de Métricas Clave */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* Card 1: ESTADO PRINCIPAL */}
+          {/* Card 1: ESTADO OPERATIVO (Etapa 2: 5 Estados de Negocio) */}
           <div className={`relative overflow-hidden rounded-2xl border p-5 shadow-xl transition-all ${
             isOperating 
               ? 'bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-900 border-emerald-500/40 shadow-emerald-950/20' 
-              : isDetained 
-                ? 'bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-900 border-amber-500/40 shadow-amber-950/20' 
-                : 'bg-gradient-to-br from-rose-950/40 via-slate-900 to-slate-900 border-rose-500/40 shadow-rose-950/20'
+              : isIdling
+                ? 'bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border-amber-500/40 shadow-amber-950/20'
+                : isParkedSleep
+                  ? 'bg-gradient-to-br from-sky-950/40 via-slate-900 to-slate-900 border-sky-500/40 shadow-sky-950/20'
+                  : isTowing
+                    ? 'bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-900 border-purple-500/40 shadow-purple-950/20'
+                    : 'bg-gradient-to-br from-rose-950/40 via-slate-900 to-slate-900 border-rose-500/40 shadow-rose-950/20'
           }`}>
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-                  {isFleetView ? 'Resumen de Flota' : 'Estado de Máquina'}
+                  {isFleetView ? 'Resumen de Flota' : 'Estado Operativo'}
                 </p>
                 <div className="flex items-center gap-2">
-                  <h2 className={`text-2xl font-black tracking-tight ${
-                    isOperating ? 'text-emerald-400' : isDetained ? 'text-amber-400' : 'text-rose-400'
+                  <h2 className={`text-xl sm:text-2xl font-black tracking-tight ${
+                    isOperating ? 'text-emerald-400' : 
+                    isIdling ? 'text-amber-400' : 
+                    isParkedSleep ? 'text-sky-400' : 
+                    isTowing ? 'text-purple-400' : 'text-rose-400'
                   }`}>
                     {isFleetView 
                       ? `${fleetSummary?.operating_count || 0} OPERANDO` 
-                      : currentStatus}
+                      : (singleStatus?.operating_status_label || currentStatus)}
                   </h2>
                 </div>
                 <p className="text-xs text-slate-300 mt-1 font-medium flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${
-                    isOperating ? 'bg-emerald-400 animate-pulse' : isDetained ? 'bg-amber-400' : 'bg-rose-400'
+                    isOperating ? 'bg-emerald-400 animate-pulse' : 
+                    isIdling ? 'bg-amber-400 animate-pulse' : 
+                    isParkedSleep ? 'bg-sky-400' : 
+                    isTowing ? 'bg-purple-400 animate-ping' : 'bg-rose-400'
                   }`} />
                   <span>
                     {isFleetView && `${fleetSummary?.detained_count || 0} detenidas, ${fleetSummary?.no_comm_count || 0} sin señal`}
-                    {!isFleetView && isOperating && 'Motor encendido en trabajo'}
-                    {!isFleetView && isDetained && 'Motor apagado en reposo'}
-                    {!isFleetView && isLostComm && 'Sin señal (> 10 min)'}
+                    {!isFleetView && isOperating && 'En movimiento'}
+                    {!isFleetView && isIdling && 'Ralentí (Motor encendido sin movimiento)'}
+                    {!isFleetView && isParkedSleep && 'Online Deep Sleep (Módem activo, GNSS ahorro)'}
+                    {!isFleetView && isTowing && '¡Alerta de remolque o grúa!'}
+                    {!isFleetView && isLostComm && 'Sin señal (> 30 min)'}
                   </span>
                 </p>
               </div>
@@ -856,12 +945,18 @@ export default function Dashboard() {
               <div className={`p-3.5 rounded-2xl border shadow-inner ${
                 isOperating 
                   ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 radar-glow' 
-                  : isDetained 
+                  : isIdling 
                     ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 radar-glow-amber' 
-                    : 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                    : isParkedSleep
+                      ? 'bg-sky-500/20 border-sky-500/40 text-sky-400'
+                      : isTowing
+                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-400 animate-bounce'
+                        : 'bg-rose-500/20 border-rose-500/40 text-rose-400'
               }`}>
                 {isOperating && <Power className="w-7 h-7" />}
-                {isDetained && <Power className="w-7 h-7 opacity-70" />}
+                {isIdling && <Power className="w-7 h-7" />}
+                {isParkedSleep && <Radio className="w-7 h-7" />}
+                {isTowing && <AlertTriangle className="w-7 h-7" />}
                 {isLostComm && <WifiOff className="w-7 h-7" />}
               </div>
             </div>
@@ -882,7 +977,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Card 2: HORÓMETRO ACUMULADO */}
+          {/* Card 2: HORÓMETRO ACUMULADO Y RALENTÍ */}
           <div className="relative overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-800 p-5 shadow-xl">
             <div className="flex items-start justify-between">
               <div>
@@ -897,6 +992,11 @@ export default function Dashboard() {
                 </div>
                 <p className="text-xs text-slate-300 mt-1 font-medium">
                   Equivale a: <strong className="text-white">{hoursInt}h {minutesInt}m</strong>
+                  {!isFleetView && (singleStatus?.total_idling_hours || 0) > 0 && (
+                    <span className="block text-[11px] text-amber-400 mt-0.5 font-mono">
+                      Ralentí: {(singleStatus.total_idling_hours).toFixed(2)} hs
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -906,41 +1006,57 @@ export default function Dashboard() {
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-              <span>Cálculo:</span>
-              <span className="text-cyan-400 font-medium">Delta Físico Robusto</span>
+              <span>{singleStatus?.engine_hours_offset > 0 ? `+${singleStatus.engine_hours_offset} hs offset` : 'Base directa'}</span>
+              {!isFleetView && (
+                <button
+                  onClick={() => setShowCalibrationModal(true)}
+                  className="text-cyan-400 hover:text-cyan-300 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Sliders className="w-3 h-3" />
+                  <span>Calibrar</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Card 3: ÚLTIMO REPORTE */}
+          {/* Card 3: ODÓMETRO TOTAL CALIBRADO */}
           <div className="relative overflow-hidden rounded-2xl bg-slate-900/80 border border-slate-800 p-5 shadow-xl">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-                  Última Conexión
+                  {isFleetView ? 'Recorrido Acumulado' : 'Odómetro Total'}
                 </p>
-                <h2 className="text-xl font-bold text-white tracking-tight">
-                  {isFleetView 
-                    ? 'Reporte Activo' 
-                    : formatTimeAgo(singleStatus?.last_updated)}
-                </h2>
+                <div className="flex items-baseline gap-1.5">
+                  <h2 className="text-2xl sm:text-3xl font-black text-white font-mono tracking-tight">
+                    {!isFleetView && calibratedOdoKm != null 
+                      ? calibratedOdoKm.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                      : 'N/A'}
+                  </h2>
+                  <span className="text-sm font-bold text-cyan-400">km</span>
+                </div>
                 <p className="text-xs text-slate-400 mt-1 font-mono">
-                  {!isFleetView && singleStatus?.last_updated 
-                    ? new Date(singleStatus.last_updated).toLocaleTimeString() 
-                    : 'Canal en tiempo real'}
+                  {!isFleetView && singleStatus?.odometer_offset_km > 0
+                    ? `Offset: +${singleStatus.odometer_offset_km.toLocaleString()} km`
+                    : (!isFleetView ? 'GPS Virtual Puro' : 'Flota activa')}
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-400">
-                <Clock className="w-7 h-7" />
+              <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400">
+                <Compass className="w-7 h-7" />
               </div>
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-              <span>Red Nginx:</span>
-              <span className="font-mono text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Puerto 3000 OK
-              </span>
+              <span>{formatTimeAgo(singleStatus?.last_updated)}</span>
+              {!isFleetView && (
+                <button
+                  onClick={() => setShowCalibrationModal(true)}
+                  className="text-indigo-400 hover:text-indigo-300 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Sliders className="w-3 h-3" />
+                  <span>Ajustar</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1925,6 +2041,15 @@ export default function Dashboard() {
       <LiveConsoleModal 
         isOpen={isLiveConsoleOpen} 
         onClose={() => setIsLiveConsoleOpen(false)} 
+      />
+
+      {/* Modal de Calibración de Odómetro y Horómetro (Etapa 2) */}
+      <DeviceCalibrationModal
+        isOpen={showCalibrationModal}
+        onClose={() => setShowCalibrationModal(false)}
+        device={currentDeviceObj}
+        status={singleStatus}
+        onSuccess={() => fetchAllData(true)}
       />
 
     </div>

@@ -198,3 +198,74 @@ def decode_fmc150_telemetry(attrs: Dict[str, Any]) -> Dict[str, Any]:
         "reported_odometer_m": reported_odometer_m,
         "reported_hours": reported_hours,
     }
+
+def evaluate_battery_health(voltage: Optional[float], ignition: bool = False) -> Tuple[str, str]:
+    """
+    Evalúa la salud de la batería principal de 12V del vehículo y el alternador.
+    Retorna: (label_salud, color_ui)
+    """
+    if voltage is None:
+        return "DESCONOCIDO", "slate"
+    if ignition and voltage >= 13.5:
+        return "ALTERNADOR CARGANDO", "emerald"
+    if ignition and voltage < 12.5:
+        return "FALLA ALTERNADOR", "amber"
+    if voltage >= 12.3:
+        return "SALUD ÓPTIMA", "emerald"
+    if voltage >= 11.8:
+        return "NORMAL / REPOSO", "blue"
+    if voltage >= 11.2:
+        return "BATERÍA BAJA", "amber"
+    return "CRÍTICA / DESCARGADA", "rose"
+
+def determine_operating_status(
+    ignition: bool,
+    speed_kmh: float,
+    motion: bool,
+    sleep_mode: Optional[int] = None,
+    last_fix_time: Optional[Any] = None,
+    now_utc: Optional[Any] = None
+) -> Tuple[str, str, str]:
+    """
+    Máquina de estados de negocio inteligente:
+    Traduce señales técnicas a semántica operativa:
+    - MOVING: En movimiento
+    - IDLING: Ralentí (motor encendido sin movimiento)
+    - PARKED_SLEEP: Estacionado (Modo Ahorro Online)
+    - TOWING: Alerta Remolque / Grúa
+    - DISCONNECTED: Sin comunicación reciente (> 30 min)
+    Retorna: (status_code, label_humano, color_hex)
+    """
+    if last_fix_time is None:
+        return "DISCONNECTED", "SIN COMUNICACIÓN", "#f43f5e"
+
+    # Cálculo de diferencia temporal en minutos
+    diff_minutes = 0.0
+    if now_utc is not None and last_fix_time is not None:
+        try:
+            diff_seconds = (now_utc - last_fix_time).total_seconds()
+            diff_minutes = max(0.0, diff_seconds / 60.0)
+        except Exception:
+            diff_minutes = 0.0
+
+    # 1. Sin comunicación reciente (> 30 minutos sin reporte)
+    if diff_minutes > 30.0:
+        return "DISCONNECTED", "SIN COMUNICACIÓN", "#f43f5e"
+
+    # 2. Alerta de remolque o grúa (movimiento con ignición apagada)
+    if not ignition and (speed_kmh >= 5.0 or (motion and speed_kmh >= 3.0)):
+        return "TOWING", "ALERTA REMOLQUE / GRÚA", "#a855f7"
+
+    # 3. Estados con motor encendido
+    if ignition:
+        if speed_kmh >= 3.0 or motion:
+            return "MOVING", "EN MOVIMIENTO", "#10b981"
+        else:
+            return "IDLING", "RALENTÍ", "#f59e0b"
+
+    # 4. Estados con motor apagado
+    # io200 = 3 (Online Deep Sleep) o reporte reciente dentro de 30 min
+    if sleep_mode in (1, 2, 3, 4) or diff_minutes <= 30.0:
+        return "PARKED_SLEEP", "ESTACIONADO (MODO AHORRO)", "#38bdf8"
+
+    return "DETENIDA", "DETENIDA", "#f59e0b"
