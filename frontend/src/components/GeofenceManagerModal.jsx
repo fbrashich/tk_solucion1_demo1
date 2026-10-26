@@ -39,11 +39,12 @@ function MapDrawingHandler({ drawingType, onMapClick }) {
 export default function GeofenceManagerModal({
   isOpen,
   onClose,
-  deviceList = []
+  deviceList = [],
+  initialTab = null
 }) {
   const [geofences, setGeofences] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('list'); // 'list' | 'create' | 'events'
+  const [activeTab, setActiveTab] = useState(initialTab || 'list'); // 'list' | 'create' | 'events'
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedGeofenceForEvents, setSelectedGeofenceForEvents] = useState(null);
@@ -64,17 +65,23 @@ export default function GeofenceManagerModal({
   // Cargar geocercas al abrir
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       fetchGeofences();
       setErrorMessage(null);
       setSuccessMessage(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   const fetchGeofences = async () => {
     setLoading(true);
     try {
       const data = await getGeofences();
       setGeofences(data);
+      if (!initialTab && Array.isArray(data) && data.length === 0) {
+        setActiveTab('create');
+      }
     } catch (err) {
       console.error('Error al cargar geocercas:', err);
       setErrorMessage('No se pudieron obtener las geocercas configuradas.');

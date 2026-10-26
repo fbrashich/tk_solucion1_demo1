@@ -187,6 +187,7 @@ export default function Dashboard() {
   const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
   const [showTripModal, setShowTripModal] = useState(false);
   const [showGeofenceModal, setShowGeofenceModal] = useState(false);
+  const [geofenceModalTab, setGeofenceModalTab] = useState(null);
   const [activeGeofences, setActiveGeofences] = useState([]);
   const [playbackTrip, setPlaybackTrip] = useState(null);
 
@@ -626,15 +627,22 @@ export default function Dashboard() {
 
             {/* Botón Gestión de Geocercas (Sprint 1 - v0.5.0) */}
             <button
-              onClick={() => setShowGeofenceModal(true)}
-              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 active:scale-95 border border-cyan-500/30 text-xs font-bold text-cyan-300 transition-all cursor-pointer shadow-sm hover:shadow-cyan-950/30"
-              title="Gestión de Geocercas y Perímetros Seguros"
+              onClick={() => {
+                setGeofenceModalTab(null);
+                setShowGeofenceModal(true);
+              }}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 active:scale-95 border border-cyan-500/50 text-xs font-bold text-cyan-200 transition-all cursor-pointer shadow-sm hover:shadow-cyan-950/40"
+              title="Crear o administrar geocercas y perímetros seguros"
             >
               <Shield className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Geocercas</span>
-              {activeGeofences.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/30 text-cyan-200 font-mono">
+              <span>Geocercas</span>
+              {activeGeofences.length > 0 ? (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/40 text-cyan-100 font-mono">
                   {activeGeofences.length}
+                </span>
+              ) : (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/30 text-cyan-300 font-mono">
+                  +
                 </span>
               )}
             </button>
@@ -1273,23 +1281,37 @@ export default function Dashboard() {
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                <span className="text-slate-400 truncate max-w-[160px]" title={currentGeofence?.description || (currentGeofence ? currentGeofence.name : 'Sin geocerca activa')}>
+                <span className="text-slate-400 truncate max-w-[140px]" title={currentGeofence?.description || (currentGeofence ? currentGeofence.name : 'Sin geocerca activa')}>
                   {currentGeofence 
                     ? (currentGeofence.description || (currentGeofence.type === 'CIRCLE' ? `Radio: ${currentGeofence.radius_meters || 200}m` : 'Perímetro Poligonal'))
                     : <span className="text-amber-400/80 font-medium">Fuera de geocerca</span>}
                 </span>
-                <button
-                  onClick={() => {
-                    if (singleStatus?.last_lat && singleStatus?.last_lon) {
-                      centerOnEvent(singleStatus.last_lat, singleStatus.last_lon);
-                    }
-                  }}
-                  className="text-cyan-400 hover:text-cyan-300 font-bold hover:underline cursor-pointer flex items-center gap-1 shrink-0"
-                  title="Centrar mapa en la posición del vehículo"
-                >
-                  <Navigation className="w-3 h-3" />
-                  <span>Centrar en Mapa</span>
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => {
+                      setGeofenceModalTab('create');
+                      setShowGeofenceModal(true);
+                    }}
+                    className="text-cyan-400 hover:text-cyan-300 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                    title="Crear nueva geocerca o gestionar perímetros"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>{currentGeofence ? 'Geocercas' : 'Crear Geocerca'}</span>
+                  </button>
+                  <span className="text-slate-700">•</span>
+                  <button
+                    onClick={() => {
+                      if (singleStatus?.last_lat && singleStatus?.last_lon) {
+                        centerOnEvent(singleStatus.last_lat, singleStatus.last_lon);
+                      }
+                    }}
+                    className="text-slate-400 hover:text-slate-200 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                    title="Centrar mapa en la posición del vehículo"
+                  >
+                    <Navigation className="w-3 h-3" />
+                    <span>Centrar</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1311,8 +1333,25 @@ export default function Dashboard() {
                 </h3>
               </div>
 
-              {/* Selector de Capas */}
+              {/* Controles del Mapa: Crear Geocercas + Selector de Capas */}
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setGeofenceModalTab(activeGeofences.length === 0 ? 'create' : null);
+                    setShowGeofenceModal(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600/25 hover:bg-cyan-600/35 active:scale-95 border border-cyan-500/40 text-cyan-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm hover:shadow-cyan-950/40"
+                  title="Abrir Diseñador de Geocercas para crear o editar perímetros en el mapa"
+                >
+                  <Shield className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>+ Geocercas</span>
+                  {activeGeofences.length > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/40 text-cyan-100 font-mono">
+                      {activeGeofences.length}
+                    </span>
+                  )}
+                </button>
+
                 <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
                   <button
                     onClick={() => setMapStyle('dark')}
@@ -2327,8 +2366,10 @@ export default function Dashboard() {
       {/* Modal de Gestión de Geocercas Inteligentes (Sprint 1 - v0.5.0) */}
       <GeofenceManagerModal
         isOpen={showGeofenceModal}
+        initialTab={geofenceModalTab}
         onClose={() => {
           setShowGeofenceModal(false);
+          setGeofenceModalTab(null);
           fetchAllData(true);
         }}
         deviceList={deviceList}
