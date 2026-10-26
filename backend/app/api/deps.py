@@ -45,3 +45,5 @@ async def get_current_admin(current_user: User = Depends(get_current_user)) -> U
             detail="Operación restringida para administradores",
         )
     return current_user
+
+get_current_active_user = get_current_user

@@ -13,7 +13,7 @@ from sqlalchemy import desc, and_
 from app.db import get_db
 from app.models.models import Device, User, VehicleTrip, TelemetryEvent
 from app.schemas.schemas import VehicleTripResponse, VehicleTripRouteResponse, TripPoint
-from app.auth.auth import get_current_user
+from app.api.deps import get_current_user
 
 logger = logging.getLogger("trips_api")
 router = APIRouter(tags=["Trips"])

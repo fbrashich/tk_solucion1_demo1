@@ -20,7 +20,7 @@ from app.schemas.schemas import (
     GeofenceResponse,
     GeofenceEventResponse
 )
-from app.api.auth import get_current_active_user
+from app.api.deps import get_current_user as get_current_active_user
 from app.services.geofence_engine import is_inside_geofence
 
 logger = logging.getLogger("geofences")
