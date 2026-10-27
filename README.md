@@ -1,97 +1,206 @@
-# Telemetría IoT Custom (Mesa Vibratoria)
+# Tokioba Telematics & Fleet IoT Platform (`v0.5.0-dev`)
+## Plataforma Integral de Telemetría Industrial, Rastreo Vehicular y Gestión de Flotas
 
-## Propósito del Proyecto
-Este proyecto consiste en el desarrollo de una plataforma web de telemetría IoT desde cero, orientada a microservicios y completamente contenerizada. El objetivo principal es recibir, almacenar y visualizar datos provenientes de un nodo IoT basado en ESP32 (incluyendo Latitud, Longitud y Estado de Ignición).
+Tokioba Telematics es una plataforma web integral, modular y completamente contenerizada en microservicios, diseñada para la adquisición, procesamiento en tiempo real, análisis operativo y visualización de flotas de vehículos y maquinaria industrial (incluyendo nodos IoT basados en ESP32 y localizadores GPS profesionales Teltonika FMC150, FMB920 y FMC920).
 
-La plataforma proporciona un dashboard de "fricción cero" diseñado para usuarios finales no técnicos, permitiéndoles monitorizar de forma sencilla y en tiempo real:
-- El estado de la conexión de sus dispositivos (ej. operativo o apagado).
-- La ubicación geográfica actual en un mapa interactivo.
-- El acumulado de horas de motor de los equipos.
-- Un registro histórico (log) de los eventos recibidos.
-
-## Tecnologías Utilizadas
-- **Backend:** Python 3.11+, FastAPI (Asíncrono), Pydantic.
-- **Base de Datos:** PostgreSQL 15+, SQLAlchemy 2.0 (Async).
-- **Frontend:** React 18 (Vite), Tailwind CSS, React-Leaflet.
-- **Infraestructura:** Docker, Docker Compose.
-
-## Inicialización
-Para ejecutar el proyecto, asegúrese de tener Docker y Docker Compose instalados, y ejecute en la raíz:
-```bash
-docker compose up --build
-```
-
-### Arquitectura y Puertos de Servicio (Gateway Router en Puerto 80)
-La plataforma opera con un **Gateway Router Nginx en el puerto 80** que expone una única entrada exterior y permite elegir mediante un selector visual y cookie (`iot_target`) qué consola visualizar:
-- **Selector Visual de Plataformas:** [http://localhost/selector](http://localhost/selector)
-- **Plataforma Propia IoT (React + FastAPI):** Escucha internamente en el puerto `8081` (o vía cookie `iot_target=custom`).
-- **Consola Traccar:** Escucha internamente en el puerto `8082` (o vía cookie `iot_target=traccar`).
-- **Ingesta Telemática Directa (Listener Global Traccar):**
-  - **Puerto 5027 (TCP/UDP):** Decodificador para trackers Teltonika (ATC700, FMC920, FMB920).
-  - **Puerto 5055 (HTTP):** Decodificador para clientes OsmAnd / FindMy.
-- **Backend FastAPI:** Escucha en el puerto `8000` (`http://localhost:8000/api` y `/docs`).
-- **Seguridad DB:** PostgreSQL opera exclusivamente en la red interna de Docker (`telemetry_db:5432`).
-
-### Credenciales de Acceso
-El script de inicialización crea automáticamente cuentas listas para usar:
-1. **Super Administrador:**
-   - **Usuario:** `admin` | **Contraseña:** `admin123`
-   - *Capacidades:* Control total, gestión de cuentas de operadores, asignación y exportación de telemetría.
-2. **Operadores Industriales:**
-   - **Usuario:** `fabianb_op` / `aldo` | **Contraseña:** `Password123!`
-   - *Capacidades:* Monitoreo en vivo de equipos, mapas de flota, horómetros, registro de eventos y exportación de datos.
-
-### Capacidades y Blindajes Telemáticos
-- **Ingesta Unificada Traccar -> FastAPI (`POST /api/ingest/traccar`):**
-  - Traccar decodifica las tramas de hardware y las reenvía vía HTTP JSON por la red interna de Docker hacia FastAPI.
-  - Cola de reintentos en memoria activa (`forward.retry.enable=true`) para proteger la telemetría ante reinicios o actualizaciones de FastAPI.
-- **Emparejamiento Estricto por IMEI (`uniqueId`):**
-  - Vinculación unívoca por IMEI (ej. ATC700 `860693080022560`), independizándose de IDs autoincrementales internos.
-- **Auto-Discovery:**
-  - Si Traccar recibe datos de un nuevo tracker, FastAPI lo crea automáticamente en PostgreSQL y registra su telemetría al instante.
-- **Blindaje de Ráfagas e Idempotencia:**
-  - Idempotencia por `device_id + fixTime` para evitar paquetes duplicados.
-  - Protección de horas de motor: cálculo estricto de deltas solo cuando `fixTime > last_updated` y la ignición está activa, evitando deltas negativos por paquetes desordenados.
-  - Preservación de la última posición en tiempo real ante ráfagas de memoria históricas.
-- **Decodificación Extendida de IO Elements Teltonika:**
-  - Ignición (`io239`/`io1`), Movimiento (`io240`), Batería del vehículo (`power`/`io66`), Batería interna (`battery`/`io67`), Odómetro (`totalDistance`/`io16`), Satélites (`sat`), Señal GSM (`rssi`) y conversión de velocidad a km/h (`speed * 1.852`).
-  - Guardado íntegro del JSON en `raw_data` con metadata `normalized`.
-- **Sincronización ABM Bidireccional:**
-  - Cualquier alta, modificación o baja de equipo en la plataforma Custom se propaga automáticamente a Traccar vía REST API.
-  - Al iniciar FastAPI (`lifespan`), una rutina en segundo plano reconcilia ambos catálogos.
-- **Suite de Pruebas Automatizadas:**
-  - `python scripts/run_dod_verification.py` valida automáticamente los 4 requerimientos del Definition of Done.
+La solución combina un **backend reactivo de alto rendimiento (FastAPI + PostgreSQL)** con una **interfaz de usuario moderna tipo Single Page Application (React 18 + Tailwind CSS + Leaflet)**, brindando monitoreo telemático en tiempo real, alertas multicanal vía Telegram, detección de viajes, planes de mantenimiento preventivo y geocercas inteligentes con cero fricción técnica para el operador.
 
 ---
 
-## Despliegue con Túnel Inverso Zrok 2 en Docker (URL Fija Reservada)
+## 🚀 Capacidades Destacadas de la Plataforma
 
-La plataforma integra el servicio **Zrok 2** directamente en Docker Compose con un nombre reservado permanente:
+### 1. Monitoreo en Tiempo Real y Motor de Estados Operativos
+- **5 Estados Operativos Canónicos:** Clasificación automática del estado de cada unidad evaluando ignición, velocidad inercial, modos de reposo y actividad telemática:
+  * 🟢 **EN MOVIMIENTO (`MOVING`):** Ignición activa y velocidad $\ge 3\text{ km/h}$ o movimiento detectado.
+  * 🟡 **RALENTÍ (`IDLING`):** Motor encendido con el vehículo detenido, acumulando tiempo y costo de combustible desperdiciado.
+  * 🔵 **ESTACIONADO EN MODO AHORRO (`PARKED_SLEEP`):** Motor apagado con el tracker en modo de suspensión telemática (`Deep Sleep` / `Online Deep Sleep`).
+  * 🟣 **ALERTA REMOLQUE / GRÚA (`TOWING`):** Detección inercial de movimiento con el motor apagado (acarreo o intento de robo).
+  * 🔴 **SIN COMUNICACIÓN (`DISCONNECTED`):** Alerta ante la pérdida de enlace telemático por más de 30 minutos.
+- **Balizas Radar Dinámicas:** Marcadores en el mapa Leaflet con halos pulsantes codificados por color según el estado operativo en tiempo real.
 
-* **URL Pública Fija**: [https://iot-web-portal.shares.zrok.io](https://iot-web-portal.shares.zrok.io)
-* **Arranque 100% Automático**: Se inicia junto con toda la plataforma al levantar Docker:
-  ```bash
-  docker compose up -d
-  ```
-  *(El contenedor `telemetry_zrok` monta la configuración de tu entorno y se conecta de forma desatendida).*
+### 2. Salud de Batería 12V y Diagnóstico de Alternador
+- Evaluación continua del voltaje de la batería principal del vehículo:
+  * `SALUD ÓPTIMA` ($\ge 12.3\text{V}$), `NORMAL / REPOSO` ($\ge 11.8\text{V}$), `BATERÍA BAJA` ($\ge 11.2\text{V}$) y `CRÍTICA / DESCARGADA` ($< 11.2\text{V}$).
+- Diagnóstico automático del alternador al encender el motor: detección de carga adecuada ($\ge 13.5\text{V}$) o advertencia de falla del sistema de carga ($< 12.5\text{V}$).
+- Lectura de batería interna de respaldo del tracker en voltios y miliamperios.
 
-* **Ver estado o registros del túnel**:
+### 3. Calibración de Tablero Físico (Odómetro y Horómetro)
+- Sincronización exacta con el tablero físico del vehículo mediante offsets calibrables (`odometer_offset_km`, `engine_hours_offset`).
+- Modal interactivo con cálculo automático del offset ingresando la lectura actual del odómetro físico.
+
+### 4. Detección Automática de Viajes, Paradas y Desperdicio de Combustible
+- Apertura automática de viaje al detectar ignición y cierre al apagar el motor.
+- Cálculo de distancias ortodrómicas geodésicas (Haversine) con filtrado de saltos espurios.
+- Registro de velocidad máxima, velocidad promedio y tiempo acumulado en ralentí.
+- Estimación económica de combustible desperdiciado en paradas con motor encendido ($1.5\text{ L/h}$).
+- **Historial de Viajes:** Filtros rápidos (*Hoy*, *Ayer*, *Últimos 7 días*, *Todos*) con métricas consolidadas de la flota.
+
+### 5. Reproductor Interactivo de Recorridos (Route Playback)
+- Visualización animada del recorrido sobre el mapa Leaflet con orientación dinámica del vehículo según el rumbo (`course`).
+- Controles de reproducción interactiva: Play / Pause, selector de velocidad ($1\times, 2\times, 5\times, 10\times$), Scrubber timeline y HUD flotante con velocímetro digital.
+
+### 6. Geocercas Inteligentes y Control de Permanencia
+- **Geometrías Poligonales y Circulares:** Diseñador visual sobre mapa Leaflet.
+- **Ray-Casting Algorithm en Python puro:** Evaluación de contención de coordenadas en $< 1.5\ \mu\text{s}$ sin requerir la extensión PostGIS ni bibliotecas C externas.
+- **Filtro Anti-Jitter (Debouncing):** Exige posiciones consecutivas estables para validar eventos `ENTER` o `EXIT`, evitando falsas alarmas por ruido GPS.
+- **Control de Permanencia:** Cálculo automático del tiempo exacto transcurrido dentro del recinto.
+- **Posicionamiento Inteligente del Diseñador:**
+  * Al seleccionar un vehículo individual, el mapa centra automáticamente en sus coordenadas con zoom 15 y botón *"Fijar centro en vehículo"*.
+  * Al visualizar la flota completa, el sistema consulta la IP pública del usuario mediante GeoIP, centrando el mapa en su ciudad o región aproximada con zoom 13.
+  * **Autocentrado único:** Centra una sola vez en la carga inicial, permitiendo navegación y zoom completamente libres sin snap-back forzado.
+- **Tarjeta Adaptativa 'Zona Operativa':** Reporta en vivo la geocerca donde se encuentra el vehículo activo y se oculta automáticamente en la vista de flota general.
+
+### 7. Alertas Operativas y Despachador Multicanal a Telegram
+- **6 Reglas Canónicas:** Corte de alimentación externa (`POWER_CUT`), batería crítica (`CRITICAL_BATTERY`), batería baja (`LOW_BATTERY`), remolque no autorizado (`TOWING`), exceso de velocidad (`OVERSPEED`) y falla de alternador (`ALTERNATOR_FAIL`).
+- **Mecanismo Anti-Flapping:** Supresión de repeticiones de 15 minutos para evitar saturación de notificaciones.
+- **Campana de Alertas en UI:** Badge interactivo con pulso de radar, detalle cronológico y resolución en un clic.
+- **Despacho Asíncrono a Telegram:** Envío instantáneo no bloqueante mediante Telegram Bot API con plantillas HTML y enlaces directos a la plataforma.
+
+### 8. Control de Horarios Laborales
+- Configuración de horarios de trabajo autorizados y días hábiles por vehículo.
+- Disparo automático de la alerta `UNAUTHORIZED_SCHEDULE` ante encendidos de motor fuera de la jornada laboral establecida.
+
+### 9. Planes de Mantenimiento Preventivo
+- Programas preventivos configurables por Odómetro (`KM`) o por Horómetro (`HOURS`).
+- Semáforo dinámico de estado: `OK` (verde), `WARNING` (amarillo, service próximo a vencer) y `OVERDUE` (rojo, service excedido).
+- Registro de servicios realizados con taller mecánico, costo económico y **auto-reprogramación automática del próximo objetivo**.
+- Libro digital auditado de intervenciones mecánicas.
+
+---
+
+## 🛠️ Stack Tecnológico
+
+| Capa | Tecnologías |
+| :--- | :--- |
+| **Backend** | Python 3.11+, FastAPI (Asíncrono), Pydantic v2, SQLAlchemy 2.0 (Async), AsyncPG, Telegram Bot API. |
+| **Base de Datos** | PostgreSQL 15+ con índices optimizados para series temporales y eventos telemáticos. |
+| **Frontend** | React 18, Vite, Tailwind CSS, Leaflet, React-Leaflet, Lucide React. |
+| **Gateway & Proxy** | Nginx Alpine con enrutamiento por cookie, soporte WebSockets, limitación de tasa y cabeceras anti-caché estrictas. |
+| **Protocolos Hardware** | Traccar Core 5027 (TCP/UDP) para Teltonika FMC150/FMB920/FMC920, OsmAnd 5055 (HTTP). |
+| **Infraestructura** | Docker, Docker Compose, Zrok 2 (túnel público seguro permanente). |
+
+---
+
+## 🌐 Arquitectura de Red y Puertos (Gateway Router en Puerto 80)
+
+La plataforma centraliza todo el tráfico exterior a través de un **Gateway Router Nginx en el puerto 80**, permitiendo alternar mediante una cookie (`iot_target`) entre las consolas disponibles:
+
+```
+                          [ Internet / LAN (Puerto 80) ]
+                                        │
+                             ┌──────────┴──────────┐
+                             ▼                     ▼
+                  [ HTTP:80 / Gateway ]    [ TCP:5027 Traccar ]
+                             │                     │
+       ┌─────────────────────┼─────────────────────┐
+       ▼                     ▼                     ▼
+ [ /selector ]      [ iot_target=custom ]  [ iot_target=traccar ]
+ Selector Visual    Plataforma Tokioba     Consola Traccar
+                     (React + FastAPI)      (Puerto 8082)
+                             │
+                  ┌──────────┴──────────┐
+                  ▼                     ▼
+         [ web:8081 Nginx ]     [ api:8000 FastAPI ]
+                  │                     │
+                  └──────────┬──────────┘
+                             ▼
+                    [ db:5432 Postgres ]
+```
+
+- **[http://localhost/selector](http://localhost/selector):** Selector visual interactivo para elegir la interfaz deseada.
+- **[http://localhost/custom](http://localhost/custom) (o cookie `iot_target=custom`):** Acceso directo a la plataforma propia Tokioba IoT (React SPA en `web:8081`).
+- **[http://localhost/traccar](http://localhost/traccar) (o cookie `iot_target=traccar`):** Acceso directo a la consola nativa de Traccar (`traccar:8082`).
+- **Puerto 5027 (TCP/UDP):** Receptor telemático para hardware Teltonika.
+- **Puerto 8000 (HTTP):** API REST FastAPI y documentación Swagger interactiva ([http://localhost:8000/docs](http://localhost:8000/docs)).
+- **Puerto 5432:** PostgreSQL accesible exclusivamente en la red interna de Docker (`telemetry_db`).
+
+---
+
+## ⚡ Instalación y Puesta en Marcha
+
+### Prerrequisitos
+- Docker Engine $\ge 24.0$ y Docker Compose $\ge 2.20$.
+- Git instalado en el sistema.
+
+### 1. Clonar el Repositorio
+```bash
+git clone https://github.com/fbrashich/tk_solucion1_demo1.git
+cd tk_solucion1_demo1
+```
+
+### 2. Configuración de Variables de Entorno
+Copia o edita las credenciales en `.env` (o en `docker-compose.yml`):
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=telemetry
+TRACCAR_API_URL=http://traccar:8082/api
+TRACCAR_USER=admin@tokioba.com
+TRACCAR_PASSWORD=tokioba_admin_2026
+TELEGRAM_BOT_TOKEN=tu_token_de_telegram_opcional
+TELEGRAM_CHAT_ID=tu_chat_id_opcional
+```
+
+### 3. Iniciar la Plataforma
+Ejecuta el despliegue contenerizado:
+```bash
+docker compose up -d
+```
+El contenedor `api` aplicará automáticamente las migraciones DDL idempotentes (`init_db.py`) antes de iniciar el servidor web.
+
+### 4. Acceder al Sistema
+Abre tu navegador en:
+```
+http://localhost/custom
+```
+*(O accede vía la IP de tu servidor, ej: `http://172.16.22.2/custom`)*
+
+---
+
+## 🔐 Credenciales de Acceso por Defecto
+
+| Rol de Usuario | Correo / Usuario | Contraseña | Capacidades |
+| :--- | :--- | :--- | :--- |
+| **Super Administrador** | `admin` / `admin@tokioba.com` | `admin123` | Control total, gestión de usuarios, asignación de equipos y parámetros de sistema. |
+| **Operador de Flota** | `fabianb@tokioba.com` / `fabianb_op` | `fabian123` / `Password123!` | Monitoreo en vivo, geocercas, viajes, alertas, mantenimiento y calibración de tablero. |
+| **Operador Industrial** | `aldo` | `Password123!` | Visualización telemática, control de horas de motor y exportación de datos. |
+
+---
+
+## 🧪 Auditoría y Ejecución de Pruebas Automatizadas
+
+La plataforma cuenta con una suite integral de **48 pruebas unitarias y de integración**:
+
+Para ejecutar todas las pruebas en el entorno backend:
+```bash
+docker compose exec api python -m unittest discover -s . -p "test_*.py" -v
+```
+
+O bien directamente en el entorno virtual de desarrollo:
+```bash
+cd backend
+python -m unittest test_stage2_states_and_calibration.py
+python -m unittest test_stage3_trips_and_playback.py
+python -m unittest test_stage4_alerts_and_maintenance.py
+python -m unittest test_stage5_geofences_and_notifications.py
+python -m unittest test_version_and_security_spec.py
+```
+
+---
+
+## 🌍 Acceso Remoto Seguro con Zrok 2
+
+La plataforma incluye integración nativa con el túnel público inverso **Zrok 2** configurado en `docker-compose.yml`:
+* **URL Pública Fija:** [https://iot-web-portal.shares.zrok.io](https://iot-web-portal.shares.zrok.io)
+* **Ver registros del túnel:**
   ```bash
   docker logs telemetry_zrok
   ```
 
-### 2. Cómo remover la pantalla de advertencia inicial (Página Interstitial de Zrok 2)
-En las versiones recientes de Zrok 2, los enlaces públicos muestran una pantalla de cortesía anti-phishing antes de redirigir al sitio web. Para eliminarla:
+---
 
-1. **Para usuarios y navegadores web (Recomendado):**
-   - Ingresa al portal de Zrok en [https://api.zrok.io](https://api.zrok.io).
-   - En la configuración de tu cuenta, asocia una tarjeta para verificarla (el costo es de **$0 USD** para cuentas gratuitas).
-   - Una vez verificada la cuenta, Zrok **desactiva automáticamente la pantalla de advertencia** para todos los enlaces públicos que crees.
-2. **Para consumo programático (APIs / Postman / cURL / Scripts):**
-   - Agrega el encabezado HTTP:
-     ```http
-     skip_zrok_interstitial: true
-     ```
-     Las herramientas que envíen este encabezado omiten inmediatamente la pantalla de espera.
+## 📚 Documentación Técnica Detallada
 
-
+Para consultar el registro cronológico completo de decisiones técnicas, arquitectura matemática, resolución de incidencias y detalles de implementación de cada etapa:
+* 📄 **Bitácora Consolidada de Progreso:** [`progreso.md`](file:///d:/TK_DEMO1/tk_solucion1_demo1/progreso.md)
+* 📋 **Especificación Comercial Plan v4:** [`plan_v4.md`](file:///d:/TK_DEMO1/tk_solucion1_demo1/plan_v4.md)
