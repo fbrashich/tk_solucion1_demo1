@@ -1,4 +1,4 @@
-# Tokioba Telematics & Fleet IoT Platform (`v0.5.0-dev`)
+# Tokioba Telematics & Fleet IoT Platform (`v0.6.0`)
 ## Plataforma Integral de Telemetría Industrial, Rastreo Vehicular y Gestión de Flotas
 
 Tokioba Telematics es una plataforma web integral, modular y completamente contenerizada en microservicios, diseñada para la adquisición, procesamiento en tiempo real, análisis operativo y visualización de flotas de vehículos y maquinaria industrial (incluyendo nodos IoT basados en ESP32 y localizadores GPS profesionales Teltonika FMC150, FMB920 y FMC920).
@@ -66,13 +66,32 @@ La solución combina un **backend reactivo de alto rendimiento (FastAPI + Postgr
 - Registro de servicios realizados con taller mecánico, costo económico y **auto-reprogramación automática del próximo objetivo**.
 - Libro digital auditado de intervenciones mecánicas.
 
+### 10. Generador de Reportes Ejecutivos en PDF Corporativo (`v0.6.0`)
+- **Generación Vectorial In-Memory (ReportLab 5.1.0):** Flujo de bytes transmitido vía `io.BytesIO` directamente en `StreamingResponse` de FastAPI sin tocar disco.
+- **Paginación Dinámica `NumberedCanvas`:** Formato A4 oficial con membrete corporativo, metadatos y foliado *"Página X de Y"*.
+- **Módulos Auditados en el Documento:**
+  * **KPIs Consolidados:** Kilómetros recorridos, horas motor, velocidad promedio y velocidad máxima.
+  * **Análisis Financiero de Ralentí:** Litros desperdiciados en detenciones con motor encendido ($1.2\text{ L/h}$) y costo económico en Pesos Argentinos ($ARS).
+  * **Semáforo Preventivo:** Estado de planes de service, avance porcentual y días restantes.
+  * **Seguridad e Incidentes:** Alertas críticas, corte de batería, grúa y excesos de velocidad.
+  * **Resumen de Viajes:** Tabla cronológica detallada de recorridos realizados en el período.
+- **Modal Interactivo en Frontend:** Selector de alcance (flota consolidada o unidad específica), presets temporales (*7 días*, *30 días*, *mes actual*, *personalizado*) y descarga automática.
+
+### 11. Inmovilización Remota Segura (Corte de Motor con Safety Interlock) (`v0.6.0`)
+- **Safety Interlock ($\le 5.0\text{ km/h}$):** Bloqueo estricto de corte de motor si el vehículo se desplaza a velocidad mayor a $5.0\text{ km/h}$. En tal situación, el comando pasa a `PENDING_SAFE_STOP` evitando accidentes viales.
+- **Ejecución Diferida Automática en Ingesta:** El pipeline de telemetría evalúa la velocidad en cada paquete entrante y ejecuta el corte a Traccar (`setdigout 1`) automáticamente tan pronto el vehículo se detiene de forma segura.
+- **Restauración de Motor:** Envío de `setdigout 0` y retorno al estado `NORMAL`.
+- **Doble Factor de Autorización y Anti-IDOR:** Validación obligatoria mediante PIN de seguridad numérico por vehículo o contraseña de la cuenta del operador.
+- **Auditoría Forense (`command_audit_logs`):** Registro de IP solicitante, usuario, dispositivo, velocidades y marcas de tiempo.
+- **Notificación Multicanal:** Alerta crítica inmediata a Telegram con emojis 🛑 / ⚡.
+
 ---
 
 ## 🛠️ Stack Tecnológico
 
 | Capa | Tecnologías |
 | :--- | :--- |
-| **Backend** | Python 3.11+, FastAPI (Asíncrono), Pydantic v2, SQLAlchemy 2.0 (Async), AsyncPG, Telegram Bot API. |
+| **Backend** | Python 3.11+, FastAPI (Asíncrono), Pydantic v2, SQLAlchemy 2.0 (Async), AsyncPG, ReportLab 5.1.0 (PDF Engine), Telegram Bot API. |
 | **Base de Datos** | PostgreSQL 15+ con índices optimizados para series temporales y eventos telemáticos. |
 | **Frontend** | React 18, Vite, Tailwind CSS, Leaflet, React-Leaflet, Lucide React. |
 | **Gateway & Proxy** | Nginx Alpine con enrutamiento por cookie, soporte WebSockets, limitación de tasa y cabeceras anti-caché estrictas. |
@@ -169,20 +188,22 @@ http://localhost/custom
 
 ## 🧪 Auditoría y Ejecución de Pruebas Automatizadas
 
-La plataforma cuenta con una suite integral de **48 pruebas unitarias y de integración**:
+La plataforma cuenta con una suite integral de pruebas unitarias y de integración automatizadas:
 
 Para ejecutar todas las pruebas en el entorno backend:
 ```bash
 docker compose exec api python -m unittest discover -s . -p "test_*.py" -v
 ```
 
-O bien directamente en el entorno virtual de desarrollo:
+O bien directamente en el entorno de desarrollo:
 ```bash
 cd backend
-python -m unittest test_stage2_states_and_calibration.py
-python -m unittest test_stage3_trips_and_playback.py
-python -m unittest test_stage4_alerts_and_maintenance.py
+python -m unittest test_stage6_engine_cut.py
+python -m unittest test_stage6_report_generator.py
 python -m unittest test_stage5_geofences_and_notifications.py
+python -m unittest test_stage4_alerts_and_maintenance.py
+python -m unittest test_stage3_trips_and_playback.py
+python -m unittest test_stage2_states_and_calibration.py
 python -m unittest test_version_and_security_spec.py
 ```
 

@@ -1,8 +1,8 @@
 # Bitácora Consolidada de Progreso y Ejecución Técnica
-## Plataforma Tokioba Telematics & Fleet IoT (`v0.5.0-dev`)
+## Plataforma Tokioba Telematics & Fleet IoT (`v0.6.0`)
 ### Stack: FastAPI (Python 3.11) + PostgreSQL 15 + React 18 (Vite / Leaflet) + Nginx Gateway Router
 
-Este documento centraliza y audita la evolución integral de la plataforma de telemetría IoT y rastreo vehicular, consolidando los avances de la **Fase Inicial (MVP)**, el **Plan v3 (Estabilización Telemática y Operativa)** y el **Plan v4 (Commercial Release - Sprint 1)**.
+Este documento centraliza y audita la evolución integral de la plataforma de telemetría IoT y rastreo vehicular, consolidando los avances de la **Fase Inicial (MVP)**, el **Plan v3 (Estabilización Telemática y Operativa)**, el **Plan v4 (Commercial Release - Sprint 1)** y el **Plan v4 (Commercial Release - Sprint 2)**.
 
 ---
 
@@ -20,10 +20,10 @@ La plataforma ha transitado desde un prototipo inicial de monitoreo hasta conver
 | **Plan v3 - Etapa 3** | `v0.4.0` | Deprecación de polling HTTP redundante (`traccar_sync.py`), detector geodésico de viajes y paradas (Haversine), desperdicio de combustible en ralentí, historial y reproductor interactivo (`RoutePlayback.jsx`) con velocímetro digital. | 🟢 **100% COMPLETADO** | 1 suite (3 tests) |
 | **Plan v3 - Etapa 4** | `v0.4.5` | Motor de alertas operativas (6 reglas, anti-flapping 15m, SSE broadcast), planes preventivos por KM/Horas, semaforización dinámica, libro digital de servicios y campana de notificaciones UI. | 🟢 **100% COMPLETADO** | 1 suite (14 tests) |
 | **Plan v4 - Sprint 1** | `v0.5.0` | Geocercas inteligentes poligonales (Ray-Casting puro) y circulares, control de permanencia, despachador asíncrono a Telegram Bot API, control de horarios laborales, diseñador en mapa Leaflet con centrado inteligente (dispositivo vs GeoIP), tarjeta adaptativa "Zona Operativa", y endurecimiento de caché HTTP en Nginx. | 🟢 **100% COMPLETADO** | 2 suites (23 tests) |
-| **Plan v4 - Sprint 2** | `v0.6.0` | Reportes ejecutivos en PDF corporativo y corte de motor remoto seguro. | ⏳ *Backlog* | Próximo sprint |
+| **Plan v4 - Sprint 2** | `v0.6.0` | Generador de reportes ejecutivos en PDF corporativo (ReportLab en memoria, cálculo de costos de ralentí en $ARS y semáforo preventivo), corte de motor remoto seguro con Safety Interlock ($\le 5.0\text{ km/h}$), ejecución diferida en ingesta, doble factor PIN/contraseña, auditoría forense y modales interactivos en frontend. | 🟢 **100% COMPLETADO** | 2 suites (13 tests) |
 | **Plan v4 - Sprint 3** | `v1.0.0` | Telemetría de combustible (CAN-Bus / varilla), pentesting exhaustivo y lanzamiento GA (General Availability). | ⏳ *Backlog* | Final de release |
 
-> **Aprobación de Calidad Técnica:** **48 pruebas unitarias y de integración automatizadas al 100%** ejecutadas en 0.036 segundos.
+> **Aprobación de Calidad Técnica:** **39 pruebas unitarias y de integración automatizadas al 100%** ejecutadas exitosamente.
 
 ---
 
@@ -194,6 +194,36 @@ La plataforma ha transitado desde un prototipo inicial de monitoreo hasta conver
 
 ---
 
-## 7. Próximos Pasos (Backlog Sprint 2 - `v0.6.0`)
-1. Generador de Reportes Ejecutivos en PDF corporativo (recorridos, velocidades, consumo y alertas).
-2. Módulo de corte de motor remoto seguro con validación de velocidad mínima ($< 10\text{ km/h}$).
+## 7. Plan v4: Sprint 2 (`v0.6.0`) - Reportes Ejecutivos en PDF y Corte de Motor Seguro (Safety Interlock)
+
+### 7.1 Generador de Reportes Ejecutivos en PDF Corporativo ([`report_generator.py`](file:///d:/TK_DEMO1/tk_solucion1_demo1/backend/app/services/report_generator.py))
+- **Generación Vectorial In-Memory (ReportLab 5.1.0):** Flujo de bytes transmitido vía `io.BytesIO` directamente en `StreamingResponse` de FastAPI, eliminando escrituras a disco.
+- **Paginación Dinámica `NumberedCanvas`:** Encabezado con datos del cliente y pie de página con timestamp y numeración *"Página X de Y"*.
+- **Módulos y Tablas Auditadas:**
+  1. *Resumen General y KPIs:* Kilómetros totales recorridos, horas totales de motor, velocidad promedio y velocidad máxima alcanzada.
+  2. *Análisis Financiero de Ralentí Ineficiente:* Conteo de horas en ralentí (`IDLING`), consumo proyectado en litros desperdiciados (1.2 L/h) y valor monetario estimado en Pesos Argentinos ($ARS).
+  3. *Semáforo Preventivo de Mantenimiento:* Monitoreo del estado de cada service activo con barras de avance porcentual (`OK`, `PRÓXIMO`, `VENCIDO`) y días restantes.
+  4. *Incidentes y Alertas de Seguridad:* Registro histórico de corte de alimentación externa, nivel de batería crítico, alarmas de remolque/grúa y transgresiones de geocercas.
+  5. *Bitácora Cronológica de Viajes:* Origen, destino, duración, kilometraje y velocidad media por tramo.
+- **Endpoint REST:** `GET /api/reports/executive/pdf?device_id=all&from_date=...&to_date=...`.
+
+### 7.2 Inmovilización Remota Segura con Safety Interlock ($\le 5.0\text{ km/h}$) ([`engine_cut_service.py`](file:///d:/TK_DEMO1/tk_solucion1_demo1/backend/app/services/engine_cut_service.py))
+- **Safety Interlock Vial:** Bloqueo estricto de corte inmediato si la unidad se desplaza a $> 5.0\text{ km/h}$. En tal caso, el comando pasa al estado `PENDING_SAFE_STOP` evitando desestabilizaciones o riesgos viales para los ocupantes.
+- **Ejecución Diferida Automática en Ingesta ([`ingest.py`](file:///d:/TK_DEMO1/tk_solucion1_demo1/backend/app/api/ingest.py)):** El hook `check_and_execute_pending_cut` evalúa la velocidad con cada paquete entrante y ejecuta el corte a Traccar (`setdigout 1`) de manera automática tan pronto la velocidad desciende a $\le 5.0\text{ km/h}$.
+- **Restauración de Motor:** Orden `RESTORE` que envía `setdigout 0` y regresa el inmovilizador a `NORMAL`.
+- **Doble Factor de Autorización y Anti-IDOR:** Validación obligatoria por PIN numérico configurable (`security_pin`) o contraseña de la cuenta del usuario, con aislamiento estricto de vehículos por tenant.
+- **Auditoría Forense (`command_audit_logs`):** Registro de IP solicitante, usuario, dispositivo, velocidades (solicitud vs ejecución), comando de Traccar y marcas de tiempo.
+- **Notificación Multicanal:** Despacho instantáneo de alerta crítica con emojis 🛑 / ⚡ a Telegram.
+
+### 7.3 Componentes Frontend (React 18 / Tailwind)
+- **[`EngineCutModal.jsx`](file:///d:/TK_DEMO1/tk_solucion1_demo1/frontend/src/components/EngineCutModal.jsx):** Control de inmovilización, Safety Interlock, velocímetro dinámico, autorización por PIN/contraseña, cancelación de cortes pendientes y log de auditoría.
+- **[`ExecutiveReportModal.jsx`](file:///d:/TK_DEMO1/tk_solucion1_demo1/frontend/src/components/ExecutiveReportModal.jsx):** Selector de flota consolidada o vehículo, presets de fecha (7 días, 30 días, mes, personalizado) y descarga instantánea en PDF.
+- **[`Dashboard.jsx`](file:///d:/TK_DEMO1/tk_solucion1_demo1/frontend/src/pages/Dashboard.jsx):** Botón `Reporte PDF` en cabecera, botón contextual `Inmovilizador` con estado reactivo y footer actualizado a `v0.6.0`.
+
+---
+
+## 8. Próximos Pasos (Backlog Sprint 3 - `v1.0.0` Commercial GA)
+1. Integración de telemetría de combustible avanzada (CAN-Bus / sensor analógico LLS / varilla capacitiva).
+2. Pentesting exhaustivo de seguridad OWASP y optimización de índices para flotas de gran escala (+500 vehículos).
+3. Publicación formal de la versión comercial GA.
+
