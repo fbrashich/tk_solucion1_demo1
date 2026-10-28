@@ -15,20 +15,31 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.units import inch
-from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    KeepTogether
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
-from reportlab.pdfgen import canvas
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+        KeepTogether
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    letter = None
+    colors = None
+    inch = 72
+    SimpleDocTemplate = Paragraph = Spacer = Table = TableStyle = KeepTogether = None
+    getSampleStyleSheet = ParagraphStyle = None
+    TA_CENTER = TA_LEFT = TA_RIGHT = TA_JUSTIFY = None
+    canvas = None
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -38,55 +49,59 @@ from app.models.models import Device, DeviceState, VehicleTrip, VehicleAlert, Ma
 
 logger = logging.getLogger("report_generator")
 
-# Paleta Corporativa Tokioba
-COLOR_PRIMARY = colors.HexColor("#0f172a")     # Slate 900
-COLOR_SECONDARY = colors.HexColor("#1e293b")   # Slate 800
-COLOR_ACCENT = colors.HexColor("#0284c7")      # Sky 600
-COLOR_TEXT_MAIN = colors.HexColor("#1e293b")   # Charcoal
-COLOR_TEXT_MUTED = colors.HexColor("#64748b")  # Slate 500
-COLOR_BG_LIGHT = colors.HexColor("#f8fafc")    # Slate 50
-COLOR_BORDER = colors.HexColor("#cbd5e1")      # Slate 300
+if REPORTLAB_AVAILABLE:
+    # Paleta Corporativa Tokioba
+    COLOR_PRIMARY = colors.HexColor("#0f172a")     # Slate 900
+    COLOR_SECONDARY = colors.HexColor("#1e293b")   # Slate 800
+    COLOR_ACCENT = colors.HexColor("#0284c7")      # Sky 600
+    COLOR_TEXT_MAIN = colors.HexColor("#1e293b")   # Charcoal
+    COLOR_TEXT_MUTED = colors.HexColor("#64748b")  # Slate 500
+    COLOR_BG_LIGHT = colors.HexColor("#f8fafc")    # Slate 50
+    COLOR_BORDER = colors.HexColor("#cbd5e1")      # Slate 300
 
-COLOR_CRITICAL = colors.HexColor("#dc2626")    # Red 600
-COLOR_WARNING = colors.HexColor("#d97706")     # Amber 600
-COLOR_SUCCESS = colors.HexColor("#16a34a")     # Green 600
+    COLOR_CRITICAL = colors.HexColor("#dc2626")    # Red 600
+    COLOR_WARNING = colors.HexColor("#d97706")     # Amber 600
+    COLOR_SUCCESS = colors.HexColor("#16a34a")     # Green 600
 
+    class NumberedCanvas(canvas.Canvas):
+        """Canvas de dos pasadas para calcular dinámicamente el total de páginas 'Página X de Y'"""
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self._saved_page_states = []
 
-class NumberedCanvas(canvas.Canvas):
-    """Canvas de dos pasadas para calcular dinámicamente el total de páginas 'Página X de Y'"""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
+        def showPage(self):
+            self._saved_page_states.append(dict(self.__dict__))
+            self._startPage()
 
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
+        def save(self):
+            num_pages = len(self._saved_page_states)
+            for state in self._saved_page_states:
+                self.__dict__.update(state)
+                self.draw_page_decorations(num_pages)
+                super().showPage()
+            super().save()
 
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_page_decorations(num_pages)
-            super().showPage()
-        super().save()
+        def draw_page_decorations(self, page_count: int):
+            self.saveState()
+            self.setFont("Helvetica", 8)
+            self.setFillColor(COLOR_TEXT_MUTED)
 
-    def draw_page_decorations(self, page_count: int):
-        self.saveState()
-        self.setFont("Helvetica", 8)
-        self.setFillColor(COLOR_TEXT_MUTED)
+            # Línea superior de pie de página
+            self.setStrokeColor(COLOR_BORDER)
+            self.setLineWidth(0.5)
+            self.line(36, 32, 612 - 36, 32)
 
-        # Línea superior de pie de página
-        self.setStrokeColor(COLOR_BORDER)
-        self.setLineWidth(0.5)
-        self.line(36, 32, 612 - 36, 32)
+            # Texto pie de página
+            footer_left = "Tokioba Telematics Platform (v0.6.0) • Documento Confidencial de Auditoría"
+            footer_right = f"Página {self._pageNumber} de {page_count}"
 
-        # Texto pie de página
-        footer_left = "Tokioba Telematics Platform (v0.6.0) • Documento Confidencial de Auditoría"
-        footer_right = f"Página {self._pageNumber} de {page_count}"
-
-        self.drawString(36, 20, footer_left)
-        self.drawRightString(612 - 36, 20, footer_right)
-        self.restoreState()
+            self.drawString(36, 20, footer_left)
+            self.drawRightString(612 - 36, 20, footer_right)
+            self.restoreState()
+else:
+    COLOR_PRIMARY = COLOR_SECONDARY = COLOR_ACCENT = COLOR_TEXT_MAIN = COLOR_TEXT_MUTED = COLOR_BG_LIGHT = COLOR_BORDER = None
+    COLOR_CRITICAL = COLOR_WARNING = COLOR_SUCCESS = None
+    NumberedCanvas = None
 
 
 async def generate_executive_pdf_report(
@@ -99,6 +114,9 @@ async def generate_executive_pdf_report(
     """
     Genera en memoria un documento PDF corporativo con ReportLab.
     """
+    if not REPORTLAB_AVAILABLE:
+        raise RuntimeError("ReportLab no está instalado en el servidor. Ejecute 'pip install reportlab' para habilitar la generación de reportes ejecutivos en PDF.")
+
     now_utc = datetime.now(timezone.utc)
     if to_date is None:
         to_date = now_utc

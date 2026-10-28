@@ -62,6 +62,12 @@ async def download_executive_pdf_report(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(ve)
         )
+    except RuntimeError as re:
+        logger.warning(f"[REPORTS API] Servicio no disponible: {re}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(re)
+        )
     except Exception as e:
         logger.error(f"[REPORTS API] Error generando reporte PDF: {e}", exc_info=True)
         raise HTTPException(
