@@ -307,6 +307,70 @@ export const getClientIpLocation = async () => {
   }
 };
 
+// ==============================================================================
+// COMANDOS REMOTOS Y CORTE DE MOTOR (Sprint 2 - v0.6.0)
+// ==============================================================================
+export const executeEngineCut = async (deviceId, action, pinOrPassword, notes = '') => {
+  const response = await api.post(`/devices/${deviceId}/engine-cut`, {
+    action,
+    pin_or_password: pinOrPassword,
+    notes
+  });
+  return response.data;
+};
+
+export const getEngineStatus = async (deviceId) => {
+  const response = await api.get(`/devices/${deviceId}/engine-status`);
+  return response.data;
+};
+
+export const getDeviceCommandLogs = async (deviceId, limit = 50) => {
+  const response = await api.get(`/devices/${deviceId}/command-logs`, { params: { limit } });
+  return response.data;
+};
+
+export const cancelPendingCommand = async (commandId) => {
+  const response = await api.post(`/commands/${commandId}/cancel`);
+  return response.data;
+};
+
+export const setDeviceSecurityPin = async (deviceId, currentPassword, newPin) => {
+  const response = await api.post(`/devices/${deviceId}/security-pin`, {
+    current_password: currentPassword,
+    new_pin: newPin
+  });
+  return response.data;
+};
+
+// ==============================================================================
+// GENERADOR DE REPORTES EJECUTIVOS EN PDF (Sprint 2 - v0.6.0)
+// ==============================================================================
+export const downloadExecutiveReportPdf = async (deviceId = 'all', fromDate = null, toDate = null) => {
+  const params = {};
+  if (deviceId && deviceId !== 'all') params.device_id = deviceId;
+  else params.device_id = 'all';
+  if (fromDate) params.from_date = fromDate;
+  if (toDate) params.to_date = toDate;
+
+  const response = await api.get('/reports/executive/pdf', {
+    params,
+    responseType: 'blob'
+  });
+
+  // Generar descarga automática en el navegador
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const targetName = deviceId && deviceId !== 'all' ? `vehiculo_${deviceId}` : 'flota_consolidada';
+  link.setAttribute('download', `reporte_ejecutivo_${targetName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return true;
+};
+
 export default api;
 
 

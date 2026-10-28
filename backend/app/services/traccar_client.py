@@ -215,6 +215,30 @@ class TraccarClient:
             owner_email=owner_email
         )
 
+    async def send_device_command(self, traccar_device_id: int, command_data: str) -> Dict[str, Any]:
+        """
+        Envía un comando telemático personalizado (ej. 'setdigout 1' o 'setdigout 0') a Traccar
+        para su despacho hacia el tracker Teltonika o compatible.
+        POST /api/commands/send
+        """
+        try:
+            async with self._get_client() as client:
+                payload = {
+                    "deviceId": traccar_device_id,
+                    "type": "custom",
+                    "attributes": {
+                        "data": command_data
+                    }
+                }
+                resp = await client.post("/commands/send", json=payload)
+                if resp.status_code in (200, 202):
+                    return {"success": True, "data": resp.json() if resp.text else {}}
+                logger.warning(f"[TRACCAR COMMAND] POST /commands/send retornó HTTP {resp.status_code}: {resp.text}")
+                return {"success": False, "error": resp.text, "status_code": resp.status_code}
+        except Exception as e:
+            logger.error(f"[TRACCAR COMMAND] Error enviando comando telemático a Traccar: {e}")
+            return {"success": False, "error": str(e)}
+
     async def reconcile_devices(self, db: AsyncSession, force: bool = False) -> Dict[str, Any]:
         """
         Reconciliación bidireccional inteligente entre Traccar y PostgreSQL:

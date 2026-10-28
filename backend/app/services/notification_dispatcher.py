@@ -171,3 +171,51 @@ def dispatch_schedule_alert(device_name: str, device_id: str, message: str):
         loop.create_task(async_dispatch_telegram(html))
     except RuntimeError:
         _send_telegram_sync(html)
+
+
+def format_telegram_engine_command(action: str, status: str, device_name: str, device_id: str, user_email: str, speed_kmh: float = None, notes: str = None) -> str:
+    """Genera plantilla HTML para comandos de inmovilización y restablecimiento de motor"""
+    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S UTC")
+
+    if action == "CUT":
+        if status == "EXECUTED":
+            emoji = "🛑"
+            title = "INMOVILIZADOR REMOTO ACTIVADO"
+            desc = "El motor ha sido cortado exitosamente vía relé Dout1."
+        elif status == "QUEUED_SAFE_STOP":
+            emoji = "⏳"
+            title = "SAFETY INTERLOCK: CORTE ENCOLADO"
+            desc = f"Vehículo en movimiento ({speed_kmh:.1f} km/h). El corte se ejecutará de forma segura cuando la velocidad baje a ≤ 5.0 km/h."
+        else:
+            emoji = "⚠️"
+            title = f"INMOVILIZADOR: ESTADO {status}"
+            desc = f"Operación de corte con estado {status}."
+    else: # RESTORE
+        emoji = "🟢"
+        title = "MOTOR RESTABLECIDO"
+        desc = "La salida digital Dout1 ha sido desactivada. La unidad está autorizada para el arranque normal."
+
+    notes_str = f"\n<b>Notas:</b> {notes}" if notes else ""
+    spd_str = f"\n<b>Velocidad al Momento:</b> {speed_kmh:.1f} km/h" if speed_kmh is not None else ""
+
+    html = (
+        f"{emoji} <b>SEGURIDAD ANTI-ROBO - {title}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>Vehículo:</b> {device_name} (<code>{device_id}</code>)\n"
+        f"<b>Operador:</b> {user_email}\n"
+        f"<b>Detalle:</b> {desc}{spd_str}{notes_str}\n"
+        f"<b>Fecha/Hora:</b> {now_str}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 <a href=\"{DASHBOARD_PUBLIC_URL}/?device={device_id}\">Ver en Plataforma</a>"
+    )
+    return html
+
+
+def dispatch_engine_command(action: str, status: str, device_name: str, device_id: str, user_email: str, speed_kmh: float = None, notes: str = None):
+    """Punto de entrada para despachar notificaciones de corte/restablecimiento de motor"""
+    html = format_telegram_engine_command(action, status, device_name, device_id, user_email, speed_kmh, notes)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(async_dispatch_telegram(html))
+    except RuntimeError:
+        _send_telegram_sync(html)

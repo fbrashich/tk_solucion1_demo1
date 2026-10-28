@@ -150,6 +150,11 @@ class DeviceStatusResponse(BaseModel):
     sleep_mode_desc: Optional[str] = None
     gnss_status_desc: Optional[str] = None
 
+    # Inmovilizador y Comandos Remotos (Sprint 2 - v0.6.0)
+    immobilizer_status: Optional[str] = "NORMAL" # "NORMAL" | "IMMOBILIZED" | "PENDING_CUT"
+    pending_command_id: Optional[int] = None
+    last_command_at: Optional[datetime] = None
+
 class FleetSummaryResponse(BaseModel):
     total_devices: int
     operating_count: int
@@ -386,5 +391,54 @@ class GeofenceEventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ==============================================================================
+# COMANDO REMOTO DE INMOVILIZACIÓN Y CORTE DE MOTOR (Sprint 2 - v0.6.0)
+# ==============================================================================
+
+class EngineCutRequest(BaseModel):
+    action: str = Field(..., pattern="^(CUT|RESTORE)$") # "CUT" | "RESTORE"
+    pin_or_password: str = Field(..., min_length=1, max_length=100)
+    notes: Optional[str] = None
+
+    @field_validator('notes', mode='before')
+    @classmethod
+    def sanitize_strings(cls, v):
+        if isinstance(v, str):
+            if re.search(r'[<>]', v):
+                raise ValueError("No se permiten caracteres HTML o scripts (<, >)")
+            return v.strip()
+        return v
+
+class EngineCutResponse(BaseModel):
+    success: bool
+    status: str # "EXECUTED" | "QUEUED_SAFE_STOP" | "FAILED"
+    message: str
+    command_id: Optional[int] = None
+    device_id: str
+    current_speed_kmh: Optional[float] = None
+    requested_at: datetime
+    executed_at: Optional[datetime] = None
+
+class CommandAuditLogResponse(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    device_id: str
+    command_type: str
+    action: str
+    status: str
+    speed_at_request_kmh: Optional[float] = None
+    speed_at_execution_kmh: Optional[float] = None
+    ip_address: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+    executed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class SetSecurityPinRequest(BaseModel):
+    current_password: str
+    new_pin: str = Field(..., min_length=4, max_length=8)
 
 

@@ -20,6 +20,7 @@ from app.services.fmc150_decoder import (
 from app.services.alert_engine import process_and_persist_alerts
 from app.services.trip_detector import process_position_for_trips
 from app.services.geofence_engine import evaluate_geofences_for_device
+from app.services.engine_cut_service import check_and_execute_pending_cut
 
 logger = logging.getLogger("ingest")
 router = APIRouter()
@@ -412,6 +413,17 @@ async def ingest_traccar(request: Request, db: AsyncSession = Depends(get_db)):
         except Exception as e:
             logger.warning(f"[GEOFENCE_ENGINE] Error evaluando geocercas para {local_device.device_id}: {e}")
 
+        # Verificación y Ejecución Diferida de Inmovilización Segura (Sprint 2 - v0.6.0)
+        try:
+            await check_and_execute_pending_cut(
+                db=db,
+                device_id=local_device.device_id,
+                device_name=local_device.name,
+                current_speed_kmh=speed_kmh
+            )
+        except Exception as e:
+            logger.warning(f"[ENGINE_CUT] Error verificando corte pendiente para {local_device.device_id}: {e}")
+
         processed_count += 1
 
         # Formatear strings limpios para Live Stream (sin bug falsy)
@@ -548,6 +560,19 @@ async def ingest_data(payload: IngestPayload, db: AsyncSession = Depends(get_db)
         )
     except Exception as e:
         logger.warning(f"[TRIP_DETECTOR] Error en ingesta manual: {e}")
+
+    # Verificación de corte pendiente en ingesta directa
+    try:
+        dev_res = await db.execute(select(Device.name).where(Device.device_id == payload.device_id))
+        dev_n = dev_res.scalar() or payload.device_id
+        await check_and_execute_pending_cut(
+            db=db,
+            device_id=payload.device_id,
+            device_name=dev_n,
+            current_speed_kmh=payload.speed or 0.0
+        )
+    except Exception as e:
+        logger.warning(f"[ENGINE_CUT] Error en ingesta manual verificando corte: {e}")
 
     await db.commit()
     return {

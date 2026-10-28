@@ -493,7 +493,10 @@ async def get_all_devices_status(
             battery_health=bat_health,
             battery_health_color=bat_health_color,
             sleep_mode_desc=decode_sleep_mode(sleep_val)[1] if sleep_val is not None else None,
-            gnss_status_desc=decode_gnss_status(gnss_val)[1] if gnss_val is not None else None
+            gnss_status_desc=decode_gnss_status(gnss_val)[1] if gnss_val is not None else None,
+            immobilizer_status=dev_state.immobilizer_status if dev_state else "NORMAL",
+            pending_command_id=dev_state.pending_command_id if dev_state else None,
+            last_command_at=dev_state.last_command_at if dev_state else None
         ))
 
     return FleetSummaryResponse(
@@ -588,7 +591,10 @@ async def get_device_status(
         battery_health=bat_health,
         battery_health_color=bat_health_color,
         sleep_mode_desc=decode_sleep_mode(sleep_val)[1] if sleep_val is not None else None,
-        gnss_status_desc=decode_gnss_status(gnss_val)[1] if gnss_val is not None else None
+        gnss_status_desc=decode_gnss_status(gnss_val)[1] if gnss_val is not None else None,
+        immobilizer_status=device_state.immobilizer_status if device_state else "NORMAL",
+        pending_command_id=device_state.pending_command_id if device_state else None,
+        last_command_at=device_state.last_command_at if device_state else None
     )
 
 @router.get("/{device_id}/logs", response_model=List[TelemetryEventResponse])

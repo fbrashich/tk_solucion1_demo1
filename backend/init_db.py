@@ -179,6 +179,32 @@ async def init_db():
                 """))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_geofence_events_device_time ON geofence_events(device_id, timestamp DESC);"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_geofence_events_geofence ON geofence_events(geofence_id, timestamp DESC);"))
+
+                # Sprint 2 (v0.6.0): Comando Remoto de Inmovilización (Corte de Motor Seguro) y Auditoría
+                await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS security_pin VARCHAR(100);"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS immobilizer_status VARCHAR(20) DEFAULT 'NORMAL';"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS pending_command_id INTEGER;"))
+                await conn.execute(text("ALTER TABLE device_states ADD COLUMN IF NOT EXISTS last_command_at TIMESTAMP WITH TIME ZONE;"))
+
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS command_audit_logs (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                        device_id VARCHAR NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+                        command_type VARCHAR(50) NOT NULL,
+                        action VARCHAR(20) NOT NULL,
+                        status VARCHAR(30) DEFAULT 'EXECUTED' NOT NULL,
+                        speed_at_request_kmh FLOAT,
+                        speed_at_execution_kmh FLOAT,
+                        ip_address VARCHAR(50),
+                        traccar_command_id INTEGER,
+                        notes TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                        executed_at TIMESTAMP WITH TIME ZONE
+                    );
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cmd_audit_device ON command_audit_logs(device_id, created_at DESC);"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_cmd_audit_status ON command_audit_logs(device_id, status);"))
             break
         except Exception as e:
             logger.warning(f"Database not ready yet (attempt {attempt}/{max_retries}): {e}")

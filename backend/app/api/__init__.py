@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api import auth, ingest, devices, admin, live, alerts, maintenance, trips, system, geofences
+from app.api import auth, ingest, devices, admin, live, alerts, maintenance, trips, system, geofences, commands, reports
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -12,4 +12,6 @@ api_router.include_router(maintenance.router, prefix="", tags=["maintenance"])
 api_router.include_router(trips.router, prefix="", tags=["trips"])
 api_router.include_router(system.router, prefix="", tags=["system"])
 api_router.include_router(geofences.router, prefix="", tags=["geofences"])
+api_router.include_router(commands.router, prefix="", tags=["commands"])
+api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 

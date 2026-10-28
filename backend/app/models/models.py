@@ -13,6 +13,26 @@ class User(Base):
     
     devices = relationship("Device", back_populates="owner", cascade="all, delete-orphan")
 
+    @property
+    def email(self):
+        return self.username
+
+    @email.setter
+    def email(self, val):
+        self.username = val
+
+    @property
+    def name(self):
+        return self.username
+
+    @property
+    def password_hash(self):
+        return self.hashed_password
+
+    @password_hash.setter
+    def password_hash(self, val):
+        self.hashed_password = val
+
 class Device(Base):
     __tablename__ = "devices"
     id = Column(Integer, primary_key=True, index=True)
@@ -41,6 +61,9 @@ class Device(Base):
     work_schedule_start = Column(String(10), default="07:00", nullable=True) # ej. "07:00"
     work_schedule_end = Column(String(10), default="19:00", nullable=True)   # ej. "19:00"
     allowed_weekdays = Column(String(30), default="0,1,2,3,4", nullable=True) # 0=Lun, 4=Vie
+
+    # PIN de seguridad opcional para comandos críticos (Sprint 2 - v0.6.0)
+    security_pin = Column(String(100), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
@@ -93,6 +116,11 @@ class DeviceState(Base):
     calibrated_odometer_km = Column(Float, default=0.0, nullable=False)
     total_idling_hours = Column(Float, default=0.0, nullable=False)
     last_idling_start = Column(DateTime(timezone=True), nullable=True)
+
+    # Inmovilizador y Corte de Motor Remoto (Sprint 2 - v0.6.0)
+    immobilizer_status = Column(String(20), default="NORMAL", nullable=False) # "NORMAL", "IMMOBILIZED", "PENDING_CUT"
+    pending_command_id = Column(Integer, nullable=True)
+    last_command_at = Column(DateTime(timezone=True), nullable=True)
 
 class VehicleAlert(Base):
     __tablename__ = "vehicle_alerts"
@@ -153,6 +181,12 @@ class VehicleTrip(Base):
     end_longitude = Column(Float, nullable=True)
     is_closed = Column(Boolean, default=False, nullable=False, index=True)
 
+    @property
+    def idling_fuel_cost_est(self) -> float:
+        """Estimación de costo en ARS de combustible desperdiciado en ralentí (2.5 L/h a $1350/L)"""
+        hs = (self.idling_seconds or 0) / 3600.0
+        return round(hs * 2.5 * 1350.0, 2)
+
 class Geofence(Base):
     __tablename__ = "geofences"
     id = Column(Integer, primary_key=True, index=True)
@@ -184,4 +218,20 @@ class GeofenceEvent(Base):
     duration_inside_seconds = Column(Integer, nullable=True) # Calculado al registrar EXIT
 
     geofence = relationship("Geofence", back_populates="events")
+
+class CommandAuditLog(Base):
+    __tablename__ = "command_audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    device_id = Column(String, ForeignKey("devices.device_id", ondelete="CASCADE"), nullable=False, index=True)
+    command_type = Column(String(50), nullable=False) # "CUT_ENGINE", "RESTORE_ENGINE"
+    action = Column(String(20), nullable=False)       # "CUT", "RESTORE"
+    status = Column(String(30), default="EXECUTED", nullable=False) # "EXECUTED", "PENDING_SAFE_STOP", "CANCELLED", "FAILED"
+    speed_at_request_kmh = Column(Float, nullable=True)
+    speed_at_execution_kmh = Column(Float, nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    traccar_command_id = Column(Integer, nullable=True)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
 

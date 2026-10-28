@@ -20,6 +20,8 @@ import MaintenancePlannerModal from '../components/MaintenancePlannerModal';
 import TripHistoryModal from '../components/TripHistoryModal';
 import RoutePlayback from '../components/RoutePlayback';
 import GeofenceManagerModal from '../components/GeofenceManagerModal';
+import EngineCutModal from '../components/EngineCutModal';
+import ExecutiveReportModal from '../components/ExecutiveReportModal';
 import { 
   Power, Clock, LogOut, Radio, RefreshCw, 
   MapPin, Gauge, ShieldCheck, CheckCircle2, 
@@ -27,7 +29,7 @@ import {
   Layers, User, ChevronRight, Activity, Download,
   ChevronDown, Cpu, FileSpreadsheet, Eye, Plus,
   Trash2, X, Smartphone, Satellite, Info, HardDrive,
-  Battery, Signal, Code, Pencil, Settings, Zap, Sliders, Wrench, Shield
+  Battery, Signal, Code, Pencil, Settings, Zap, Sliders, Wrench, Shield, FileText
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -190,6 +192,18 @@ export default function Dashboard() {
   const [geofenceModalTab, setGeofenceModalTab] = useState(null);
   const [activeGeofences, setActiveGeofences] = useState([]);
   const [playbackTrip, setPlaybackTrip] = useState(null);
+
+  // Estados de Control de Motor e Inmovilización Segura (Sprint 2 - v0.6.0)
+  const [showEngineCutModal, setShowEngineCutModal] = useState(false);
+  const [engineCutTargetDevice, setEngineCutTargetDevice] = useState(null);
+
+  // Estado de Generador de Reporte Ejecutivo en PDF Corporativo (Sprint 2 - v0.6.0)
+  const [showExecutiveReportModal, setShowExecutiveReportModal] = useState(false);
+
+  const handleOpenEngineCut = (device = null) => {
+    setEngineCutTargetDevice(device || currentDeviceObj || { device_id: selectedDeviceId, name: singleStatus?.name });
+    setShowEngineCutModal(true);
+  };
 
   // Estado para gestión de dispositivos por el Operador (CRUD Completo)
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
@@ -671,6 +685,16 @@ export default function Dashboard() {
               )}
             </button>
 
+            {/* Botón Generador de Reporte Ejecutivo en PDF (Sprint 2 - v0.6.0) */}
+            <button
+              onClick={() => setShowExecutiveReportModal(true)}
+              className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 active:scale-95 border border-indigo-500/50 text-xs font-bold text-indigo-200 transition-all cursor-pointer shadow-sm hover:shadow-indigo-950/40"
+              title="Generar y Descargar Reporte Ejecutivo en PDF Corporativo"
+            >
+              <FileText className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Reporte PDF</span>
+            </button>
+
             {/* Botón de Exportar Datos CSV */}
             <button
               onClick={handleExportCSV}
@@ -1049,6 +1073,28 @@ export default function Dashboard() {
               >
                 <Navigation className="w-4 h-4 text-cyan-400" />
                 <span>Viajes</span>
+              </button>
+
+              {/* Botón de Inmovilizador / Corte de Motor Seguro (Sprint 2 - v0.6.0) */}
+              <button
+                onClick={() => handleOpenEngineCut()}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-md active:scale-95 ${
+                  singleStatus?.immobilizer_status === 'IMMOBILIZED'
+                    ? 'bg-rose-500/25 hover:bg-rose-500/35 text-rose-300 border-rose-500/60 shadow-rose-950/40 animate-pulse'
+                    : singleStatus?.immobilizer_status === 'PENDING_SAFE_STOP'
+                    ? 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-300 border-amber-500/60 shadow-amber-950/40'
+                    : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border-rose-500/30'
+                }`}
+                title="Control Remoto de Inmovilizador y Corte de Motor Seguro (Safety Interlock)"
+              >
+                <Power className="w-3.5 h-3.5 text-rose-400" />
+                <span>
+                  {singleStatus?.immobilizer_status === 'IMMOBILIZED'
+                    ? 'Motor Bloqueado'
+                    : singleStatus?.immobilizer_status === 'PENDING_SAFE_STOP'
+                    ? 'Corte Pendiente'
+                    : 'Inmovilizador'}
+                </span>
               </button>
 
               {/* Botón para ver Telemetría Cruda (JSON) */}
@@ -2403,6 +2449,25 @@ export default function Dashboard() {
         deviceName={currentDeviceObj?.name || singleStatus?.name || (selectedDeviceId !== 'all' ? selectedDeviceId : '')}
       />
 
+      {/* Modal de Control de Inmovilizador / Corte de Motor Seguro (Sprint 2 - v0.6.0) */}
+      <EngineCutModal
+        isOpen={showEngineCutModal}
+        onClose={() => {
+          setShowEngineCutModal(false);
+          setEngineCutTargetDevice(null);
+        }}
+        device={engineCutTargetDevice || currentDeviceObj || { device_id: selectedDeviceId, name: singleStatus?.name }}
+        onStatusChange={() => fetchAllData(true)}
+      />
+
+      {/* Modal de Generación de Reporte Ejecutivo en PDF (Sprint 2 - v0.6.0) */}
+      <ExecutiveReportModal
+        isOpen={showExecutiveReportModal}
+        onClose={() => setShowExecutiveReportModal(false)}
+        selectedDeviceId={selectedDeviceId}
+        deviceList={deviceList}
+      />
+
       {/* Footer Industrial con Versión SemVer y Trazabilidad del Producto */}
       <footer className="border-t border-slate-900 bg-slate-950/80 px-4 py-3 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
@@ -2410,9 +2475,9 @@ export default function Dashboard() {
             <span className="font-semibold text-slate-400">Tokioba Telematics Platform</span>
             <span>•</span>
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-800/40 text-[11px] font-mono text-cyan-400 font-bold">
-              v0.5.0-dev
+              v0.6.0
             </span>
-            <span className="text-slate-600 hidden md:inline">Sprint 1 (Geofencing & Alerts Dispatcher)</span>
+            <span className="text-slate-600 hidden md:inline">Sprint 2 (Executive PDF & Safety Interlock Engine Cut)</span>
           </div>
           <div className="flex items-center gap-3 text-[11px] text-slate-500">
             <span>Teltonika FMC150 IoT Core</span>

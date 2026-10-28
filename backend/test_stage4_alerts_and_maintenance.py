@@ -8,13 +8,18 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 # Configuración de mocks para dependencias de infraestructura en entornos locales sin dependencias externas
-for mod in [
-    'sqlalchemy', 'sqlalchemy.orm', 'sqlalchemy.ext', 'pydantic_settings', 'app.core.config',
-    'sqlalchemy.ext.asyncio', 'sqlalchemy.future', 'sqlalchemy.sql',
-    'app.models', 'app.models.models', 'app.services.live_stream', 'app.services.live_manager'
-]:
-    if mod not in sys.modules:
-        sys.modules[mod] = MagicMock()
+import types
+from sqlalchemy.orm import declarative_base
+
+if 'app.db' not in sys.modules:
+    db_m = types.ModuleType('app.db')
+    db_m.Base = declarative_base()
+    db_m.get_db = MagicMock()
+    sys.modules['app.db'] = db_m
+if 'pydantic_settings' not in sys.modules:
+    sys.modules['pydantic_settings'] = MagicMock()
+if 'greenlet' not in sys.modules:
+    sys.modules['greenlet'] = MagicMock()
 
 from app.services.alert_engine import evaluate_alert_rules
 
